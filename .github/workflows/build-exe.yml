@@ -1,0 +1,102 @@
+name: Сборка HabitTracker (exe и установщик)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, claude/habit-tracker-app-zpj1he]
+    tags: ["v*"]
+    paths: ["habit_app.py", "app/**", "tools/**", "*.bat", "installer.iss", ".github/workflows/build-exe.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Установка зависимостей
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller playwright
+      - name: Сборка exe
+        run: |
+          mkdir build -Force | Out-Null
+          python habit_app.py --make-ico build\habit.ico
+          pyinstaller --noconfirm --onefile --name HabitTracker --icon build\habit.ico --add-data "app;app" habit_app.py
+      - name: Проверка exe и интерфейса в Edge
+        shell: pwsh
+        env:
+          PYTHONIOENCODING: utf-8
+        run: |
+          $env:HABIT_DATA_DIR = "$env:RUNNER_TEMP\hdata"
+          $p = Start-Process -FilePath dist\HabitTracker.exe -ArgumentList "--no-browser","--port","8799" -PassThru
+          Start-Sleep -Seconds 8
+          $page = Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8799/
+          if ($page.Content -notmatch "window.LOCAL_APP=true") { Stop-Process -Id $p.Id -Force; throw "страница трекера не отдаётся" }
+          python tools/check_app.py http://127.0.0.1:8799/ check_out
+          $code = $LASTEXITCODE
+          Stop-Process -Id $p.Id -Force
+          if ($code -ne 0) { throw "проверка интерфейса не прошла" }
+          if (-not (Test-Path "$env:HABIT_DATA_DIR\habits.json")) { throw "данные не сохранились в habits.json" }
+          Write-Output "OK: exe запускается, данные сохраняются"
+      - name: Скриншоты проверки
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: check_out/
+          retention-days: 14
+      - name: Сборка установщика (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress | Out-Null
+            $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          }
+          & $iscc "/DAppVersion=1.0.$env:GITHUB_RUN_NUMBER" installer.iss
+          if ($LASTEXITCODE -ne 0) { throw "установщик не собран" }
+      - name: Проверка установки и удаления
+        shell: pwsh
+        run: |
+          Start-Process -Wait -FilePath dist\HabitTracker-Setup.exe -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/TASKS=desktopicon"
+          $exe = "$env:LOCALAPPDATA\Programs\HabitTracker\HabitTracker.exe"
+          if (-not (Test-Path $exe)) { throw "после установки нет $exe" }
+          $p = Start-Process -FilePath $exe -ArgumentList "--no-browser","--port","8798" -PassThru
+          Start-Sleep -Seconds 8
+          $st = Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8798/api/status
+          Stop-Process -Id $p.Id -Force
+          Write-Output $st.Content
+          if ($st.Content -notmatch 'Local\\\\HabitTracker\\\\habits\.json') { throw "установленная версия должна хранить данные в %LOCALAPPDATA%\HabitTracker" }
+          Start-Process -Wait -FilePath "$env:LOCALAPPDATA\Programs\HabitTracker\unins000.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES"
+          Start-Sleep -Seconds 3
+          if (Test-Path $exe) { throw "удаление не сработало" }
+          Write-Output "OK: установка, запуск и удаление работают"
+      - name: Комплект для скачивания
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force portable | Out-Null
+          Copy-Item dist\HabitTracker.exe portable\
+          Copy-Item -LiteralPath "Запуск для iPhone.bat" -Destination portable\
+          Copy-Item README.md portable\
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HabitTracker-Setup
+          path: dist/HabitTracker-Setup.exe
+          retention-days: 90
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HabitTracker-portable
+          path: portable/
+          retention-days: 90
+      - name: Выпуск (Releases) при теге v*
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/HabitTracker-Setup.exe
+            dist/HabitTracker.exe

@@ -1,0 +1,7 @@
+__pycache__/
+build/
+dist/
+portable/
+*.spec
+habit_data/
+check_out/
