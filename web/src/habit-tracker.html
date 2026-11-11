@@ -1,0 +1,1416 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Трекер привычек</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    darkMode: 'class',
+    theme: { extend: { fontFamily: { sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', '"SF Pro Text"', 'system-ui', 'sans-serif'] } } }
+  };
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.24.0/babel.min.js"></script>
+<style>
+  html, body { -webkit-tap-highlight-color: transparent; }
+  body { font-feature-settings: "cv11", "ss01"; }
+  @keyframes pop { 0% { transform: scale(.6) } 55% { transform: scale(1.18) } 100% { transform: scale(1) } }
+  .pop { animation: pop .4s cubic-bezier(.3, 1.6, .5, 1) both; }
+  @keyframes draw { from { stroke-dashoffset: 24 } to { stroke-dashoffset: 0 } }
+  .check-draw { stroke-dasharray: 24; animation: draw .35s ease-out .05s both; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
+  .fade-up { animation: fadeUp .4s cubic-bezier(.2, .8, .2, 1) both; }
+  @keyframes sheetIn { from { transform: translateY(40px); opacity: 0 } to { transform: none; opacity: 1 } }
+  .sheet-in { animation: sheetIn .32s cubic-bezier(.2, .8, .2, 1) both; }
+  @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+  .fade-in { animation: fadeIn .2s ease both; }
+  @keyframes flicker { 0%, 100% { transform: scale(1) rotate(0) } 50% { transform: scale(1.08) rotate(-4deg) } }
+  .flame { animation: flicker 1.8s ease-in-out infinite; transform-origin: 50% 90%; }
+  .bar-fill { transition: width .6s cubic-bezier(.2, .8, .2, 1); }
+  @media (prefers-reduced-motion: reduce) {
+    .pop, .check-draw, .fade-up, .sheet-in, .flame, .fade-in { animation: none !important; }
+    .check-draw { stroke-dasharray: none; }
+  }
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { scrollbar-width: none; }
+</style>
+</head>
+<body class="bg-[#f5f5f7] dark:bg-black text-zinc-900 dark:text-zinc-100 antialiased transition-colors duration-300">
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef } = React;
+
+/* ---------- Иконки (Lucide) ---------- */
+const ICONS = {
+  check: <path d="M20 6 9 17l-5-5" />,
+  plus: <><path d="M5 12h14" /><path d="M12 5v14" /></>,
+  flame: <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />,
+  trash: <><path d="M3 6h18" /><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" /><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" /><line x1="10" x2="10" y1="11" y2="17" /><line x1="14" x2="14" y1="11" y2="17" /></>,
+  archive: <><rect width="20" height="5" x="2" y="3" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></>,
+  restore: <><rect width="20" height="5" x="2" y="3" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h2" /><path d="M20 8v11a2 2 0 0 1-2 2h-2" /><path d="m9 15 3-3 3 3" /><path d="M12 12v9" /></>,
+  sun: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2" /><path d="M12 20v2" /><path d="m4.93 4.93 1.41 1.41" /><path d="m17.66 17.66 1.41 1.41" /><path d="M2 12h2" /><path d="M20 12h2" /><path d="m6.34 17.66-1.41 1.41" /><path d="m19.07 4.93-1.41 1.41" /></>,
+  moon: <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />,
+  monitor: <><rect width="20" height="14" x="2" y="3" rx="2" /><line x1="8" x2="16" y1="21" y2="21" /><line x1="12" x2="12" y1="17" y2="21" /></>,
+  x: <><path d="M18 6 6 18" /><path d="m6 6 12 12" /></>,
+  listChecks: <><path d="m3 17 2 2 4-4" /><path d="m3 7 2 2 4-4" /><path d="M13 6h8" /><path d="M13 12h8" /><path d="M13 18h8" /></>,
+  chart: <><path d="M3 3v18h18" /><path d="M18 17V9" /><path d="M13 17V5" /><path d="M8 17v-3" /></>,
+  more: <><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /><circle cx="5" cy="12" r="1" /></>,
+  heart: <path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z" />,
+  zap: <path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" />,
+  activity: <path d="M22 12h-4l-3 9L9 3l-3 9H2" />,
+  leaf: <><path d="M11 20A7 7 0 0 1 9.8 6.1C15.5 5 17 4.48 19 2c1 2 2 4.18 2 8 0 5.5-4.78 10-10 10Z" /><path d="M2 21c0-3 1.85-5.36 5.08-6C9.5 14.52 12 13 13 12" /></>,
+  sunrise: <><path d="M12 2v8" /><path d="m4.93 10.93 1.41 1.41" /><path d="M2 18h2" /><path d="M20 18h2" /><path d="m19.07 10.93-1.41 1.41" /><path d="M22 22H2" /><path d="m8 6 4-4 4 4" /><path d="M16 18a4 4 0 0 0-8 0" /></>,
+  clock: <><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></>,
+  calendar: <><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4" /><path d="M8 2v4" /><path d="M3 10h18" /></>,
+  trophy: <><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></>,
+  target: <><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></>,
+  sparkles: <><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /><path d="M5 3v4" /><path d="M19 17v4" /><path d="M3 5h4" /><path d="M17 19h4" /></>,
+  minus: <path d="M5 12h14" />,
+  pill: <><path d="m10.5 20.5 10-10a4.95 4.95 0 1 0-7-7l-10 10a4.95 4.95 0 1 0 7 7Z" /><path d="m8.5 8.5 7 7" /></>,
+  bell: <><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></>,
+  bellOff: <><path d="M8.7 3A6 6 0 0 1 18 8a21.3 21.3 0 0 0 .6 5" /><path d="M17 17H3s3-2 3-9a4.67 4.67 0 0 1 .3-1.7" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /><path d="m2 2 20 20" /></>,
+  alarm: <><circle cx="12" cy="13" r="8" /><path d="M12 9v4l2 2" /><path d="M5 3 2 6" /><path d="m22 6-3-3" /><path d="M6.38 18.7 4 21" /><path d="M17.64 18.67 20 21" /></>,
+  pencil: <><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z" /><path d="m15 5 4 4" /></>,
+  volume: <><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14" /></>,
+  lock: <><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>,
+  medal: <><path d="M7.21 15 2.66 7.14a2 2 0 0 1 .13-2.2L4.4 2.8A2 2 0 0 1 6 2h12a2 2 0 0 1 1.6.8l1.6 2.14a2 2 0 0 1 .14 2.2L16.79 15" /><path d="M11 12 5.12 2.2" /><path d="m13 12 5.88-9.8" /><path d="M8 7h8" /><circle cx="12" cy="17" r="5" /><path d="M12 18v-2h-.5" /></>,
+  star: <path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" />,
+};
+function Icon({ name, size = 20, stroke = 2, className = '', fill = 'none', fillOpacity }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={fill} fillOpacity={fillOpacity} stroke="currentColor"
+      strokeWidth={stroke} strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden="true">
+      {ICONS[name]}
+    </svg>
+  );
+}
+
+/* ---------- Справочники ---------- */
+const CATS = {
+  health:       { label: 'Здоровье',            short: 'Здоровье',      icon: 'heart',    hex: '#34d399', chip: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-300' },
+  productivity: { label: 'Продуктивность',      short: 'Продуктивность', icon: 'zap',     hex: '#818cf8', chip: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-400/15 dark:text-indigo-300' },
+  sport:        { label: 'Спорт',               short: 'Спорт',         icon: 'activity', hex: '#fb8a72', chip: 'bg-orange-100 text-orange-700 dark:bg-orange-400/15 dark:text-orange-300' },
+  mind:         { label: 'Ментальное здоровье', short: 'Ментальное',    icon: 'leaf',     hex: '#a78bfa', chip: 'bg-violet-100 text-violet-700 dark:bg-violet-400/15 dark:text-violet-300' },
+};
+const TIMES = {
+  morning: { label: 'Утро', icon: 'sunrise' },
+  day:     { label: 'День', icon: 'sun' },
+  evening: { label: 'Вечер', icon: 'moon' },
+  any:     { label: 'Любое время', icon: 'clock' },
+};
+const TIME_ORDER = ['morning', 'day', 'evening', 'any'];
+const WD = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+const WD_ORDER = [1, 2, 3, 4, 5, 6, 0];
+const PALETTE = ['#34d399', '#818cf8', '#fb8a72', '#a78bfa', '#fbbf24', '#38bdf8'];
+
+/* ---------- Даты ---------- */
+const pad = n => String(n).padStart(2, '0');
+const keyOf = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const dayStart = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const addDays = (d, n) => { const x = dayStart(d); x.setDate(x.getDate() + n); return x; };
+const startOfWeek = d => addDays(d, -((d.getDay() + 6) % 7));
+const plural = (n, [one, few, many]) => {
+  const a = n % 10, b = n % 100;
+  if (a === 1 && b !== 11) return one;
+  if (a >= 2 && a <= 4 && (b < 10 || b >= 20)) return few;
+  return many;
+};
+
+/* ---------- Логика привычек ---------- */
+const isScheduledOn = (h, d) => h.freq === 'daily' ? true : h.freq === 'days' ? h.days.includes(d.getDay()) : true;
+function weekCount(h, d) {
+  const ws = startOfWeek(d); let c = 0;
+  for (let i = 0; i < 7; i++) if (h.history[keyOf(addDays(ws, i))]) c++;
+  return c;
+}
+function streak(h, today) {
+  const done = d => !!h.history[keyOf(d)];
+  if (h.freq === 'times') {
+    let s = 0, w = startOfWeek(today);
+    if (weekCount(h, w) >= h.times) s++;
+    w = addDays(w, -7);
+    while (s < 520 && weekCount(h, w) >= h.times) { s++; w = addDays(w, -7); }
+    return { n: s, unit: plural(s, ['неделя', 'недели', 'недель']) };
+  }
+  let s = 0, d = dayStart(today);
+  if (isScheduledOn(h, d) && !done(d)) d = addDays(d, -1);
+  for (let i = 0; i < 2000; i++) {
+    if (keyOf(d) < h.createdAt) break;
+    if (isScheduledOn(h, d)) { if (done(d)) s++; else break; }
+    d = addDays(d, -1);
+  }
+  return { n: s, unit: plural(s, ['день', 'дня', 'дней']) };
+}
+const freqText = h => h.freq === 'daily' ? 'Ежедневно'
+  : h.freq === 'days' ? WD_ORDER.filter(x => h.days.includes(x)).map(x => WD[x]).join(', ')
+  : `${h.times} ${plural(h.times, ['раз', 'раза', 'раз'])} в неделю`;
+
+function todayItems(habits, now) {
+  const k = keyOf(now);
+  return habits
+    .filter(h => !h.archived && h.createdAt <= k && (h.freq !== 'days' || h.days.includes(now.getDay())))
+    .map(h => {
+      const done = !!h.history[k];
+      const wc = h.freq === 'times' ? weekCount(h, now) : 0;
+      const weekMet = h.freq === 'times' && wc >= h.times && !done;
+      return { h, done, wc, weekMet };
+    });
+}
+function dayProgress(items) {
+  const counted = items.filter(x => !x.weekMet);
+  return { done: counted.filter(x => x.done).length, total: counted.length };
+}
+
+/* ---------- Баллы и медали ---------- */
+// 1 день, в который выполнена хотя бы одна привычка = 1 балл
+function activeDays(habits) {
+  const s = new Set();
+  for (const h of habits) for (const k in h.history) if (h.history[k]) s.add(k);
+  return s;
+}
+const pointsOf = habits => activeDays(habits).size;
+const MEDALS = [
+  ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+  ...[20, 30, 40, 50, 60, 70, 80, 90, 100],
+  ...[200, 300, 400, 500, 600, 700, 800, 900, 1000],
+];
+const TIERS = {
+  bronze: { from: '#fde2c4', to: '#d08a4c', edge: '#b8723a', ink: '#7a3f12', ribbon: ['#fb8a72', '#f26b52'], label: 'Бронза', range: '1–10 дней' },
+  silver: { from: '#ffffff', to: '#a9b3c4', edge: '#8a95a8', ink: '#3f4a5e', ribbon: ['#818cf8', '#6366f1'], label: 'Серебро', range: '20–100 дней' },
+  gold:   { from: '#fff3b0', to: '#e6a700', edge: '#c98f00', ink: '#6b4700', ribbon: ['#34d399', '#10b981'], label: 'Золото', range: '200–1000 дней' },
+};
+const tierOf = n => n <= 10 ? 'bronze' : n <= 100 ? 'silver' : 'gold';
+const daysWord = n => plural(n, ['день', 'дня', 'дней']);
+
+/* ---------- Таблетки и будильник ---------- */
+const medToday = (m, d) => !m.days || !m.days.length || m.days.includes(d.getDay());
+const hmOf = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
+const inText = mins => mins < 60 ? `через ${mins} мин` : `через ${Math.floor(mins / 60)} ч${mins % 60 ? ' ' + (mins % 60) + ' мин' : ''}`;
+
+const sound = (() => {
+  let ctx = null;
+  const unlock = () => {
+    try {
+      if (!ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) ctx = new AC(); }
+      if (ctx && ctx.state === 'suspended') ctx.resume();
+    } catch (e) {}
+  };
+  ['pointerdown', 'keydown', 'touchstart'].forEach(ev => addEventListener(ev, unlock, { passive: true }));
+  const beep = () => {
+    try {
+      if (!ctx || ctx.state !== 'running') return false;
+      const t = ctx.currentTime;
+      [0, 0.18, 0.36].forEach((o, i) => {
+        const osc = ctx.createOscillator(), g = ctx.createGain();
+        osc.type = 'sine'; osc.frequency.value = i === 2 ? 1175 : 880;
+        g.gain.setValueAtTime(0.0001, t + o);
+        g.gain.linearRampToValueAtTime(0.3, t + o + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + o + 0.16);
+        osc.connect(g); g.connect(ctx.destination);
+        osc.start(t + o); osc.stop(t + o + 0.17);
+      });
+      return true;
+    } catch (e) { return false; }
+  };
+  return { unlock, beep };
+})();
+
+/* ---------- Хранилище и демо-данные ---------- */
+const LS_KEY = 'habit-tracker-v1';
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function seed() {
+  const today = new Date();
+  const created = keyOf(addDays(today, -70));
+  const make = (n, name, category, timeOfDay, freqObj, rate, recent, doneToday) => {
+    const h = { id: 'demo' + n, name, category, timeOfDay, freq: 'daily', days: [], times: 3, ...freqObj, createdAt: created, archived: false, history: {} };
+    const r = rng(n * 977);
+    let scheduledSeen = 0;
+    for (let i = 1; i <= 70; i++) {
+      const d = addDays(today, -i);
+      if (!isScheduledOn(h, d)) continue;
+      scheduledSeen++;
+      if (scheduledSeen <= recent || r() < rate) h.history[keyOf(d)] = true;
+    }
+    if (doneToday) h.history[keyOf(today)] = true;
+    return h;
+  };
+  return [
+    make(1, 'Выпить стакан воды', 'health', 'morning', {}, 0.85, 8, true),
+    make(2, 'Утренняя зарядка', 'sport', 'morning', {}, 0.65, 4, false),
+    make(3, 'Чтение 20 минут', 'productivity', 'evening', {}, 0.75, 12, false),
+    make(4, 'Медитация 10 минут', 'mind', 'any', { freq: 'days', days: [1, 3, 5] }, 0.8, 5, false),
+  ];
+}
+// Обнуление: привычки остаются, история и баллы начинаются с нуля
+const resetHistory = habits => {
+  const k = keyOf(new Date());
+  return habits.map(h => ({ ...h, history: {}, createdAt: k }));
+};
+// В приложении для компьютера (HabitTracker.exe) данные хранятся в файле habits.json на компьютере,
+// а страница получает их от сервера приложения (window.SERVER_STATE). В артефакте — в браузере.
+const LOCAL = !!window.LOCAL_APP;
+const medalFloor = n => [...MEDALS].reverse().find(m => m <= n) || 0;
+// Перенос данных из первой версии приложения (формат habits/done)
+function migrateOld(p) {
+  if (!p || !p.done || !p.habits.some(h => !h.history)) return p;
+  const habits = p.habits.map(h => {
+    if (h.history) return h;
+    const target = h.target || 1, done = p.done[h.id] || {}, history = {};
+    for (const k in done) if (done[k] >= target) history[k] = true;
+    const days = Array.isArray(h.days) && h.days.length === 7 ? [1, 2, 3, 4, 5, 6, 0].filter((_, i) => h.days[i]) : [];
+    return { id: h.id, name: h.name, category: 'health', timeOfDay: 'any', freq: days.length && days.length < 7 ? 'days' : 'daily',
+      days: days.length < 7 ? days : [], times: 3, createdAt: h.created || keyOf(new Date()), archived: !!h.archived, history };
+  });
+  const { done: _d, settings, ...rest } = p;
+  return { ...rest, habits, theme: (settings && settings.theme) || 'auto', zeroed: true };
+}
+function normalize(p) {
+  p = migrateOld(p);
+  const base = { theme: 'auto', meds: [], medLog: {}, alarmsOn: true, ...p };
+  if (!p.zeroed) { base.habits = resetHistory(p.habits); base.zeroed = true; }
+  if (base.medalSeen == null) base.medalSeen = medalFloor(pointsOf(base.habits));
+  return base;
+}
+function load() {
+  try {
+    const p = LOCAL ? window.SERVER_STATE : JSON.parse(localStorage.getItem(LS_KEY) || 'null');
+    if (p && Array.isArray(p.habits)) return normalize(p);
+  } catch (e) {}
+  return { habits: resetHistory(seed()), theme: 'auto', zeroed: true, meds: [], medLog: {}, alarmsOn: true, medalSeen: 0 };
+}
+
+/* ---------- Синхронизация с приложением на компьютере ---------- */
+const isObj = x => x && typeof x === 'object' && !Array.isArray(x);
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+// Трёхстороннее слияние: base — последнее сохранённое, mine — здесь, theirs — с другого устройства
+function merge3(base, mine, theirs) {
+  if (same(mine, base)) return theirs;
+  if (same(theirs, base) || same(mine, theirs)) return mine;
+  if (isObj(mine) && isObj(theirs)) {
+    const b = isObj(base) ? base : {}, out = {};
+    for (const k of new Set([...Object.keys(theirs), ...Object.keys(mine)])) {
+      const v = merge3(b[k], mine[k], theirs[k]);
+      if (v !== undefined) out[k] = v;
+    }
+    return out;
+  }
+  const byId = a => Array.isArray(a) && a.every(x => isObj(x) && x.id);
+  if (byId(mine) && byId(theirs)) {
+    const idx = a => Object.fromEntries((byId(a) ? a : []).map(x => [x.id, x]));
+    const B = idx(base), M = idx(mine), T = idx(theirs), out = [];
+    for (const x of [...theirs, ...mine.filter(x => !T[x.id])]) {
+      if (out.some(y => y.id === x.id)) continue;
+      const v = merge3(B[x.id], M[x.id], T[x.id]);
+      if (v !== undefined) out.push(v);
+    }
+    return out;
+  }
+  return mine;
+}
+const sync = (() => {
+  const strip = s => { if (!s) return s; const { rev, saved, version, ...rest } = s; return rest; };
+  let rev = (window.SERVER_STATE && window.SERVER_STATE.rev) || 0;
+  let base = strip(window.SERVER_STATE) || null;   // что лежит на сервере
+  let want = null, timer = null, busy = false;
+  const api = { onRemote: null };
+  async function send() {
+    if (busy) { timer = setTimeout(send, 300); return; }
+    timer = null; busy = true;
+    const body = want;
+    try {
+      const r = await fetch('api/state', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, rev }) });
+      const j = await r.json().catch(() => ({}));
+      if (r.status === 409 && j.state) {
+        // за это время данные изменили на другом устройстве — объединяем и сохраняем ещё раз
+        const theirs = strip(j.state);
+        want = merge3(base, want, theirs); base = theirs; rev = j.state.rev;
+        if (api.onRemote) api.onRemote(want);
+        timer = setTimeout(send, 50);
+      } else if (r.ok && j.ok) {
+        rev = j.rev; base = body;
+        if (want === body) want = null;
+      } else throw new Error(j.err || r.status);
+    } catch (e) { if (!timer) timer = setTimeout(send, 4000); }
+    finally { busy = false; }
+  }
+  api.push = s => {
+    const st = strip(s);
+    if (same(st, want || base)) return;
+    want = st; clearTimeout(timer); timer = setTimeout(send, 250);
+  };
+  async function poll() {
+    if (!LOCAL || busy || want) return;
+    try {
+      const r = await fetch('api/state', { cache: 'no-store' });
+      const st = await r.json();
+      if (st && st.rev !== rev && !busy && !want) {
+        rev = st.rev; base = strip(st);
+        if (api.onRemote) api.onRemote(base);
+      }
+    } catch (e) {}
+  }
+  if (LOCAL) {
+    setInterval(poll, 5000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
+    addEventListener('focus', poll);
+    addEventListener('beforeunload', e => { if (want) { e.preventDefault(); e.returnValue = ''; } });
+  }
+  return api;
+})();
+function save(s) {
+  if (LOCAL) return sync.push(s);
+  try { localStorage.setItem(LS_KEY, JSON.stringify(s)); } catch (e) {}
+}
+
+/* ---------- Конфетти ---------- */
+const confetti = (() => {
+  let canvas, ctx, parts = [], raf = null;
+  const reduce = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function ensure() {
+    if (canvas) return;
+    canvas = document.createElement('canvas');
+    canvas.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:70;width:100%;height:100%';
+    document.body.appendChild(canvas);
+    ctx = canvas.getContext('2d');
+    const rs = () => { const r = window.devicePixelRatio || 1; canvas.width = innerWidth * r; canvas.height = innerHeight * r; ctx.setTransform(r, 0, 0, r, 0, 0); };
+    rs(); addEventListener('resize', rs);
+  }
+  function loop() {
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    parts = parts.filter(p => p.life > 0);
+    for (const p of parts) {
+      p.vy += p.g; p.vx *= 0.986; p.vy *= 0.986; p.x += p.vx; p.y += p.vy; p.rot += p.vr; p.life--;
+      ctx.save(); ctx.globalAlpha = Math.min(1, p.life / 30); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.fillStyle = p.c;
+      if (p.round) { ctx.beginPath(); ctx.arc(0, 0, p.s / 2.4, 0, 7); ctx.fill(); } else ctx.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2);
+      ctx.restore();
+    }
+    raf = parts.length ? requestAnimationFrame(loop) : null;
+  }
+  return (x, y, n, colors, power = 1) => {
+    if (reduce()) return;
+    ensure();
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, sp = (1.5 + Math.random() * 4.5) * power;
+      parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 2.5 * power, g: 0.16, s: 5 + Math.random() * 6,
+        c: colors[i % colors.length], rot: Math.random() * 6, vr: (Math.random() - .5) * .35, life: 55 + Math.random() * 55, round: Math.random() < .3 });
+    }
+    if (!raf) raf = requestAnimationFrame(loop);
+  };
+})();
+
+/* ---------- UI-кусочки ---------- */
+const card = 'rounded-3xl bg-white dark:bg-zinc-900 ring-1 ring-black/[.04] dark:ring-white/[.06] shadow-[0_1px_2px_rgba(0,0,0,.04),0_8px_24px_-12px_rgba(0,0,0,.10)]';
+
+function Pill({ active, onClick, children, color }) {
+  return (
+    <button type="button" onClick={onClick}
+      className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium transition-all active:scale-95 ${active
+        ? (color ? 'text-white shadow-sm' : 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 shadow-sm')
+        : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'}`}
+      style={active && color ? { background: color } : undefined}>
+      {children}
+    </button>
+  );
+}
+
+function ProgressCard({ done, total }) {
+  const pct = total ? Math.round(done / total * 100) : 0;
+  const all = total > 0 && done === total;
+  const msg = total === 0 ? 'На сегодня ничего не запланировано' : all ? 'Все привычки выполнены — вы молодец!' : done === 0 ? 'Начнём день с маленького шага' : `Отличный темп — осталось ${total - done}`;
+  return (
+    <section className={`${card} p-5 sm:p-6 fade-up`}>
+      <div className="flex items-end justify-between gap-4">
+        <div>
+          <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Прогресс за сегодня</p>
+          <p className="mt-1 text-2xl sm:text-3xl font-bold tracking-tight">
+            Выполнено {done} <span className="text-zinc-400 dark:text-zinc-500 font-semibold">из {total}</span>
+          </p>
+        </div>
+        <div className={`text-3xl sm:text-4xl font-extrabold tabular-nums tracking-tight ${all ? 'text-emerald-500' : 'text-indigo-500 dark:text-indigo-400'}`}>{pct}%</div>
+      </div>
+      <div className="mt-4 h-3 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+        <div className="bar-fill h-full rounded-full bg-gradient-to-r from-emerald-300 via-indigo-300 to-indigo-400 dark:from-emerald-400 dark:via-indigo-400 dark:to-indigo-500" style={{ width: pct + '%' }} />
+      </div>
+      <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
+        {all && <Icon name="sparkles" size={15} className="text-amber-400" />}{msg}
+      </p>
+    </section>
+  );
+}
+
+function HabitCard({ item, now, idx, onToggle, onArchive, onDelete }) {
+  const { h, done, wc, weekMet } = item;
+  const cat = CATS[h.category] || CATS.health;
+  const st = streak(h, now);
+  const [menu, setMenu] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const btn = useRef(null);
+  const last7 = [...Array(7)].map((_, i) => addDays(now, i - 6));
+  const closeMenu = () => { setMenu(false); setConfirmDel(false); };
+  const menuRef = useRef(null), moreRef = useRef(null);
+  // меню закрывается нажатием в любом месте вне его и клавишей Esc
+  useEffect(() => {
+    if (!menu) return;
+    const down = e => { if (!menuRef.current?.contains(e.target) && !moreRef.current?.contains(e.target)) closeMenu(); };
+    const key = e => { if (e.key === 'Escape') closeMenu(); };
+    document.addEventListener('pointerdown', down, true);
+    document.addEventListener('keydown', key);
+    return () => { document.removeEventListener('pointerdown', down, true); document.removeEventListener('keydown', key); };
+  }, [menu]);
+
+  return (
+    <div className={`fade-up group relative flex items-center gap-3.5 sm:gap-4 rounded-2xl bg-white dark:bg-zinc-900 p-3.5 sm:p-4 ring-1 ring-black/[.04] dark:ring-white/[.06] shadow-[0_1px_2px_rgba(0,0,0,.03)] transition-all duration-200 ${menu ? 'z-30' : 'hover:-translate-y-0.5 hover:shadow-[0_10px_30px_-12px_rgba(0,0,0,.18)]'} ${weekMet ? 'opacity-70' : ''}`}
+      style={{ animationDelay: idx * 40 + 'ms' }}>
+      <button ref={btn} onClick={() => onToggle(h.id, btn.current)}
+        aria-label={done ? `Снять отметку: ${h.name}` : `Отметить выполнение: ${h.name}`} aria-pressed={done}
+        className="relative shrink-0 w-12 h-12 rounded-full grid place-items-center transition-all duration-300 active:scale-90 focus:outline-none focus-visible:ring-4 focus-visible:ring-indigo-300/50"
+        style={done ? { background: cat.hex, boxShadow: `0 8px 18px -8px ${cat.hex}` } : { boxShadow: `inset 0 0 0 2.5px ${cat.hex}66`, background: `${cat.hex}10` }}>
+        <span key={done ? 'd' : 'u'} className={`grid place-items-center ${done ? 'pop' : ''}`}>
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={done ? '#fff' : cat.hex} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"
+            className={done ? '' : 'opacity-0 group-hover:opacity-50 transition-opacity'}>
+            <path d="M20 6 9 17l-5-5" className={done ? 'check-draw' : ''} />
+          </svg>
+        </span>
+      </button>
+
+      <div className="min-w-0 flex-1">
+        <div className={`font-semibold text-[15px] sm:text-base leading-snug truncate transition-colors duration-300 ${done ? 'text-zinc-400 dark:text-zinc-500 line-through decoration-2' : ''}`}
+          style={done ? { textDecorationColor: cat.hex + 'aa' } : undefined}>{h.name}</div>
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${cat.chip}`}><Icon name={cat.icon} size={12} stroke={2.4} />{cat.short}</span>
+          <span className="text-zinc-400 dark:text-zinc-500">{freqText(h)}{h.freq === 'times' ? ` · ${wc}/${h.times}` : ''}</span>
+          {weekMet && <span className="text-emerald-600 dark:text-emerald-400 font-medium">Цель недели выполнена ✓</span>}
+        </div>
+        <div className="mt-2 flex gap-1" aria-label="Последние 7 дней">
+          {last7.map(d => {
+            const k = keyOf(d), did = !!h.history[k], sch = isScheduledOn(h, d) && k >= h.createdAt;
+            return <span key={k} title={`${d.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short' })}: ${did ? 'выполнено' : sch ? 'не выполнено' : 'не по плану'}`}
+              className={`h-1.5 w-4 rounded-full transition-colors ${did ? '' : sch ? 'bg-zinc-200 dark:bg-zinc-700' : 'bg-zinc-100 dark:bg-zinc-800/60'}`}
+              style={did ? { background: cat.hex } : undefined} />;
+          })}
+        </div>
+      </div>
+
+      <div className="flex flex-col items-end gap-1.5 shrink-0">
+        <div title={`Серия: ${st.n} ${st.unit}`}
+          className={`flex items-center gap-1 rounded-full pl-1.5 pr-2.5 py-1 text-sm font-bold tabular-nums ${st.n > 0 ? 'bg-orange-50 text-orange-500 dark:bg-orange-400/10 dark:text-orange-300' : 'text-zinc-300 dark:text-zinc-600'}`}>
+          <Icon name="flame" size={16} className={st.n > 0 ? 'flame' : ''} fill={st.n > 0 ? 'currentColor' : 'none'} fillOpacity={0.25} />
+          {st.n}<span className="font-medium text-[11px] opacity-70">{h.freq === 'times' ? 'нед' : 'дн'}</span>
+        </div>
+        <button ref={moreRef} onClick={() => setMenu(m => !m)} aria-label="Действия"
+          className="w-8 h-8 rounded-full grid place-items-center text-zinc-400 hover:text-zinc-700 hover:bg-zinc-100 dark:hover:text-zinc-200 dark:hover:bg-zinc-800 transition">
+          <Icon name="more" size={18} />
+        </button>
+      </div>
+
+      {menu && <>
+        <div ref={menuRef} className="fade-in absolute right-3 top-[calc(100%-8px)] z-20 w-56 rounded-2xl bg-white dark:bg-zinc-800 p-1.5 shadow-xl ring-1 ring-black/5 dark:ring-white/10">
+          <button onClick={() => { closeMenu(); onArchive(h.id); }} className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 transition">
+            <Icon name="archive" size={17} className="text-zinc-500" />В архив
+          </button>
+          {!confirmDel
+            ? <button onClick={() => setConfirmDel(true)} className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition">
+                <Icon name="trash" size={17} />Удалить</button>
+            : <button onClick={() => { closeMenu(); onDelete(h.id); }} className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm font-semibold text-white bg-rose-500 hover:bg-rose-600 transition">
+                <Icon name="trash" size={17} />Точно удалить?</button>}
+        </div>
+      </>}
+    </div>
+  );
+}
+
+function TodayView({ habits, now, onToggle, onArchive, onDelete, onAdd }) {
+  const items = todayItems(habits, now);
+  const { done, total } = dayProgress(items);
+  const offToday = habits.filter(h => !h.archived && h.freq === 'days' && !h.days.includes(now.getDay()));
+  let idx = 0;
+  return (
+    <div className="space-y-6">
+      <ProgressCard done={done} total={total} />
+      {items.length === 0 && (
+        <div className={`${card} p-8 text-center fade-up`}>
+          <div className="mx-auto w-14 h-14 rounded-2xl grid place-items-center bg-indigo-50 text-indigo-500 dark:bg-indigo-400/10 dark:text-indigo-300"><Icon name="target" size={26} /></div>
+          <p className="mt-4 font-semibold">Пока нет привычек на сегодня</p>
+          <p className="mt-1 text-sm text-zinc-500">Добавьте первую — начать можно с чего-то совсем простого.</p>
+          <button onClick={onAdd} className="mt-5 inline-flex items-center gap-2 rounded-full bg-indigo-500 hover:bg-indigo-600 text-white px-5 py-2.5 text-sm font-semibold transition active:scale-95"><Icon name="plus" size={18} />Новая привычка</button>
+        </div>
+      )}
+      {TIME_ORDER.map(t => {
+        const group = items.filter(x => (x.h.timeOfDay || 'any') === t);
+        if (!group.length) return null;
+        const gd = group.filter(x => x.done).length;
+        return (
+          <section key={t}>
+            <div className="flex items-center justify-between px-1 mb-2.5">
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
+                <Icon name={TIMES[t].icon} size={16} />{TIMES[t].label}
+              </h2>
+              <span className="text-xs font-medium text-zinc-400 tabular-nums">{gd}/{group.length}</span>
+            </div>
+            <div className="space-y-2.5">
+              {group.map(x => <HabitCard key={x.h.id} item={x} now={now} idx={idx++} onToggle={onToggle} onArchive={onArchive} onDelete={onDelete} />)}
+            </div>
+          </section>
+        );
+      })}
+      {offToday.length > 0 && (
+        <p className="px-1 text-xs text-zinc-400 dark:text-zinc-500">
+          Сегодня не по плану: {offToday.map(h => h.name).join(', ')}
+        </p>
+      )}
+    </div>
+  );
+}
+
+const HEAT = ['bg-zinc-100 dark:bg-zinc-800', 'bg-emerald-100 dark:bg-emerald-900/70', 'bg-emerald-200 dark:bg-emerald-700/80', 'bg-emerald-300 dark:bg-emerald-500/90', 'bg-emerald-400 dark:bg-emerald-400'];
+
+function StatsView({ habits, now }) {
+  const active = habits.filter(h => !h.archived);
+  const todayK = keyOf(now);
+  const ratio = d => {
+    const k = keyOf(d); let exp = 0, dn = 0;
+    for (const h of active) {
+      if (h.createdAt > k) continue;
+      const did = !!h.history[k];
+      if (h.freq === 'times') { exp += h.times / 7; if (did) dn++; }
+      else if (isScheduledOn(h, d)) { exp++; if (did) dn++; }
+    }
+    return exp ? Math.min(1, dn / exp) : null;
+  };
+  const level = r => r == null ? 0 : r === 0 ? 0 : r < .34 ? 1 : r < .67 ? 2 : r < 1 ? 3 : 4;
+
+  const WEEKS = 17;
+  const start = addDays(startOfWeek(now), -(WEEKS - 1) * 7);
+  const cols = [...Array(WEEKS)].map((_, w) => [...Array(7)].map((_, r) => addDays(start, w * 7 + r)));
+
+  let totalDone = 0, sum = 0, cnt = 0;
+  for (let i = 0; i < 30; i++) {
+    const d = addDays(now, -i), k = keyOf(d);
+    for (const h of active) if (h.history[k]) totalDone++;
+    const r = ratio(d); if (r != null && i > 0) { sum += r; cnt++; }
+  }
+  const avg = cnt ? Math.round(sum / cnt * 100) : 0;
+  let best = { n: 0, name: '—', unit: 'дней' };
+  for (const h of active) { const s = streak(h, now); if (s.n > best.n) best = { ...s, name: h.name }; }
+
+  const stats = [
+    { label: 'Баллы · 1 день = 1 балл', value: pointsOf(habits), icon: 'star', color: 'text-amber-500 bg-amber-50 dark:bg-amber-400/10' },
+    { label: 'Средний уровень', value: avg + '%', icon: 'target', color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-400/10' },
+    { label: `Лучшая серия · ${best.name}`, value: `${best.n} ${best.unit}`, icon: 'flame', color: 'text-orange-500 bg-orange-50 dark:bg-orange-400/10' },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {stats.map((s, i) => (
+          <div key={i} className={`${card} p-4 fade-up flex sm:block items-center gap-3`} style={{ animationDelay: i * 50 + 'ms' }}>
+            <div className={`w-10 h-10 rounded-xl grid place-items-center shrink-0 ${s.color}`}><Icon name={s.icon} size={20} /></div>
+            <div className="sm:mt-3 min-w-0">
+              <div className="text-2xl font-bold tracking-tight tabular-nums">{s.value}</div>
+              <div className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{s.label}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <section className={`${card} p-5 sm:p-6 fade-up`}>
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold flex items-center gap-2"><Icon name="calendar" size={18} className="text-indigo-500" />Активность</h2>
+          <span className="text-xs text-zinc-400">последние {WEEKS} недель</span>
+        </div>
+        <div className="mt-4 overflow-x-auto no-scrollbar">
+          <div className="inline-flex gap-2 min-w-full justify-center">
+            <div className="flex flex-col gap-[4px] pt-5 text-[10px] text-zinc-400 pr-1">
+              {['Пн', '', 'Ср', '', 'Пт', '', 'Вс'].map((l, i) => <div key={i} className="h-[15px] leading-[15px]">{l}</div>)}
+            </div>
+            <div>
+              <div className="flex gap-[4px] h-5 text-[10px] text-zinc-400">
+                {cols.map((c, i) => {
+                  const show = i === 0 || c[0].getMonth() !== cols[i - 1][0].getMonth();
+                  return <div key={i} className="w-[15px] whitespace-nowrap overflow-visible">{show ? c[0].toLocaleDateString('ru-RU', { month: 'short' }).replace('.', '') : ''}</div>;
+                })}
+              </div>
+              <div className="flex gap-[4px]">
+                {cols.map((c, i) => (
+                  <div key={i} className="flex flex-col gap-[4px]">
+                    {c.map(d => {
+                      const k = keyOf(d);
+                      if (k > todayK) return <div key={k} className="w-[15px] h-[15px]" />;
+                      const r = ratio(d);
+                      return <div key={k} title={`${d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}: ${r == null ? 'нет привычек' : Math.round(r * 100) + '%'}`}
+                        className={`w-[15px] h-[15px] rounded-[4px] transition-transform hover:scale-125 ${HEAT[level(r)]} ${k === todayK ? 'ring-2 ring-indigo-400 ring-offset-1 ring-offset-white dark:ring-offset-zinc-900' : ''}`} />;
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 flex items-center justify-end gap-1.5 text-[11px] text-zinc-400">
+          Меньше {HEAT.map((c, i) => <span key={i} className={`w-3 h-3 rounded-[3px] ${c}`} />)} Больше
+        </div>
+      </section>
+
+      <section className={`${card} p-5 sm:p-6 fade-up`}>
+        <h2 className="font-semibold flex items-center gap-2"><Icon name="chart" size={18} className="text-indigo-500" />По привычкам · 30 дней</h2>
+        <div className="mt-4 space-y-5">
+          {active.length === 0 && <p className="text-sm text-zinc-500">Нет активных привычек.</p>}
+          {active.map(h => {
+            const cat = CATS[h.category] || CATS.health, st = streak(h, now);
+            const days = [...Array(30)].map((_, i) => addDays(now, i - 29));
+            const n = days.filter(d => h.history[keyOf(d)]).length;
+            return (
+              <div key={h.id}>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="font-medium truncate flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: cat.hex }} />{h.name}</span>
+                  <span className="shrink-0 text-xs text-zinc-500 tabular-nums flex items-center gap-2">
+                    {n} за 30 дн
+                    <span className="inline-flex items-center gap-0.5 text-orange-500 font-semibold"><Icon name="flame" size={13} fill="currentColor" fillOpacity={.25} />{st.n}</span>
+                  </span>
+                </div>
+                <div className="mt-2 grid gap-[3px]" style={{ gridTemplateColumns: 'repeat(30, minmax(0, 1fr))' }}>
+                  {days.map(d => {
+                    const k = keyOf(d), did = !!h.history[k], before = k < h.createdAt, sch = isScheduledOn(h, d);
+                    return <div key={k} title={d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                      className={`aspect-square rounded-[3px] ${did ? '' : before ? 'bg-transparent' : sch ? 'bg-zinc-200 dark:bg-zinc-700' : 'bg-zinc-100 dark:bg-zinc-800'}`}
+                      style={did ? { background: cat.hex } : undefined} />;
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function Medal({ n, unlocked, size = 96 }) {
+  const t = TIERS[tierOf(n)];
+  const id = `m${n}-${size}`;
+  const fs = n >= 1000 ? 22 : n >= 100 ? 26 : 32;
+  return (
+    <svg width={size} height={size * 1.2} viewBox="0 0 100 120" aria-hidden="true"
+      style={unlocked ? undefined : { filter: 'grayscale(1)', opacity: .35 }}>
+      <defs>
+        <radialGradient id={id + 'g'} cx="35%" cy="30%" r="75%">
+          <stop offset="0%" stopColor={t.from} />
+          <stop offset="100%" stopColor={t.to} />
+        </radialGradient>
+        <linearGradient id={id + 's'} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#fff" stopOpacity=".7" />
+          <stop offset="60%" stopColor="#fff" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <polygon points="30,0 46,0 54,38 38,42" fill={t.ribbon[0]} />
+      <polygon points="70,0 54,0 46,38 62,42" fill={t.ribbon[1]} />
+      <circle cx="50" cy="76" r="40" fill={t.edge} />
+      <circle cx="50" cy="76" r="36" fill={`url(#${id}g)`} />
+      <circle cx="50" cy="76" r="30" fill="none" stroke={t.edge} strokeOpacity=".45" strokeWidth="1.5" strokeDasharray="2 3" />
+      <ellipse cx="40" cy="62" rx="20" ry="13" fill={`url(#${id}s)`} />
+      <text x="50" y={fs >= 32 ? 84 : 83} textAnchor="middle" fontFamily="Inter, system-ui, sans-serif" fontWeight="800" fontSize={fs} fill={t.ink}>{n}</text>
+      <text x="50" y="97" textAnchor="middle" fontFamily="Inter, system-ui, sans-serif" fontWeight="700" fontSize="9" letterSpacing=".5" fill={t.ink} fillOpacity=".8">{daysWord(n).toUpperCase()}</text>
+    </svg>
+  );
+}
+
+function MedalsView({ habits }) {
+  const pts = pointsOf(habits);
+  const next = MEDALS.find(m => m > pts);
+  const prev = [...MEDALS].reverse().find(m => m <= pts) || 0;
+  const unlockedCount = MEDALS.filter(m => m <= pts).length;
+  const pct = next ? Math.round((pts - prev) / (next - prev) * 100) : 100;
+  const groups = ['bronze', 'silver', 'gold'];
+  return (
+    <div className="space-y-6">
+      <section className={`${card} p-5 sm:p-6 fade-up`}>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Баллы за активность</p>
+            <p className="mt-1 text-3xl sm:text-4xl font-extrabold tracking-tight tabular-nums flex items-center gap-2">
+              <Icon name="star" size={30} className="text-amber-400" fill="currentColor" />{pts}
+              <span className="text-lg font-semibold text-zinc-400">{plural(pts, ['балл', 'балла', 'баллов'])}</span>
+            </p>
+            <p className="mt-1 text-xs text-zinc-400">1 день с выполненной привычкой = 1 балл</p>
+          </div>
+          <div className="text-right">
+            <div className="text-2xl font-bold tabular-nums">{unlockedCount}<span className="text-zinc-400 text-base font-semibold">/{MEDALS.length}</span></div>
+            <div className="text-xs text-zinc-400">медалей</div>
+          </div>
+        </div>
+        <div className="mt-5">
+          {next ? <>
+            <div className="flex justify-between text-sm">
+              <span className="text-zinc-600 dark:text-zinc-300">Следующая: «Вы продержались {next} {daysWord(next)}»</span>
+              <span className="font-semibold tabular-nums text-indigo-500 dark:text-indigo-400">ещё {next - pts}</span>
+            </div>
+            <div className="mt-2 h-3 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+              <div className="bar-fill h-full rounded-full bg-gradient-to-r from-amber-300 to-orange-400" style={{ width: pct + '%' }} />
+            </div>
+          </> : <p className="text-sm font-semibold text-emerald-500">Все медали собраны — это легендарно! 🏆</p>}
+        </div>
+      </section>
+
+      {groups.map(g => {
+        const list = MEDALS.filter(m => tierOf(m) === g);
+        const got = list.filter(m => m <= pts).length;
+        return (
+          <section key={g}>
+            <div className="flex items-center justify-between px-1 mb-2.5">
+              <h2 className="text-sm font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">{TIERS[g].label} · {TIERS[g].range}</h2>
+              <span className="text-xs font-medium text-zinc-400 tabular-nums">{got}/{list.length}</span>
+            </div>
+            <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
+              {list.map((m, i) => {
+                const on = m <= pts;
+                return (
+                  <div key={m} className={`fade-up relative flex flex-col items-center rounded-2xl bg-white dark:bg-zinc-900 ring-1 ring-black/[.04] dark:ring-white/[.06] px-2 pt-3 pb-3 transition hover:-translate-y-0.5 ${on ? 'hover:shadow-[0_10px_30px_-12px_rgba(0,0,0,.2)]' : ''}`}
+                    style={{ animationDelay: i * 30 + 'ms' }} title={on ? `Получена: вы продержались ${m} ${daysWord(m)}` : `Откроется через ${m - pts} ${daysWord(m - pts)}`}>
+                    <Medal n={m} unlocked={on} size={64} />
+                    {!on && <span className="absolute top-2 right-2 text-zinc-300 dark:text-zinc-600"><Icon name="lock" size={14} /></span>}
+                    <div className={`mt-1.5 text-[11px] font-semibold leading-tight text-center ${on ? '' : 'text-zinc-400 dark:text-zinc-500'}`}>Вы продержались</div>
+                    <div className={`text-[11px] tabular-nums ${on ? 'text-zinc-500 dark:text-zinc-400' : 'text-zinc-300 dark:text-zinc-600'}`}>{m} {daysWord(m)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+function Switch({ on, onChange, label }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} aria-label={label} onClick={() => onChange(!on)}
+      className={`relative shrink-0 w-12 h-7 rounded-full transition-colors ${on ? 'bg-emerald-400' : 'bg-zinc-300 dark:bg-zinc-700'}`}>
+      <span className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform duration-200 ${on ? 'translate-x-5' : ''}`} />
+    </button>
+  );
+}
+
+function PillsView({ meds, medLog, now, alarmsOn, onToggleAlarms, onTake, onAdd, onEdit }) {
+  const k = keyOf(now), hm = hmOf(now), log = medLog[k] || {};
+  const [tested, setTested] = useState(null);
+  const doses = meds.filter(m => medToday(m, now))
+    .flatMap(m => m.times.map(t => ({ med: m, time: t, key: `${m.id}@${t}` })))
+    .sort((a, b) => a.time.localeCompare(b.time));
+  const taken = doses.filter(d => log[d.key]).length;
+  const pct = doses.length ? Math.round(taken / doses.length * 100) : 0;
+  const next = doses.find(d => !log[d.key] && d.time >= hm);
+  const testSound = () => { sound.unlock(); setTimeout(() => setTested(sound.beep() ? 'ok' : 'fail'), 120); };
+
+  if (!meds.length) return (
+    <div className={`${card} p-8 text-center fade-up`}>
+      <div className="mx-auto w-14 h-14 rounded-2xl grid place-items-center bg-violet-50 text-violet-500 dark:bg-violet-400/10 dark:text-violet-300"><Icon name="pill" size={26} /></div>
+      <p className="mt-4 font-semibold">Расписание приёма пока пустое</p>
+      <p className="mt-1 text-sm text-zinc-500">Добавьте лекарство, время приёма — и будильник напомнит о нём.</p>
+      <button onClick={onAdd} className="mt-5 inline-flex items-center gap-2 rounded-full bg-violet-500 hover:bg-violet-600 text-white px-5 py-2.5 text-sm font-semibold transition active:scale-95"><Icon name="plus" size={18} />Добавить лекарство</button>
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      <section className={`${card} p-5 sm:p-6 fade-up`}>
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-zinc-500 dark:text-zinc-400">Приём таблеток сегодня</p>
+            <p className="mt-1 text-2xl sm:text-3xl font-bold tracking-tight">Принято {taken} <span className="text-zinc-400 dark:text-zinc-500 font-semibold">из {doses.length}</span></p>
+          </div>
+          <div className="text-3xl font-extrabold tabular-nums text-violet-500 dark:text-violet-400">{pct}%</div>
+        </div>
+        <div className="mt-4 h-3 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden">
+          <div className="bar-fill h-full rounded-full bg-gradient-to-r from-violet-300 to-indigo-400" style={{ width: pct + '%' }} />
+        </div>
+        <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400 flex items-center gap-1.5">
+          <Icon name="alarm" size={15} className="text-violet-500" />
+          {next ? <>Следующий приём в <b className="text-zinc-800 dark:text-zinc-100">{next.time}</b> — {next.med.name}, {inText(toMin(next.time) - toMin(hm))}</>
+            : doses.length && taken === doses.length ? 'Все лекарства на сегодня приняты' : 'На сегодня больше приёмов нет'}
+        </p>
+      </section>
+
+      <section className={`${card} p-5 fade-up`}>
+        <div className="flex items-center gap-3">
+          <div className={`w-10 h-10 rounded-xl grid place-items-center shrink-0 ${alarmsOn ? 'bg-amber-50 text-amber-500 dark:bg-amber-400/10' : 'bg-zinc-100 text-zinc-400 dark:bg-zinc-800'}`}>
+            <Icon name={alarmsOn ? 'bell' : 'bellOff'} size={20} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="font-semibold">Будильник</div>
+            <div className="text-xs text-zinc-500 dark:text-zinc-400">{alarmsOn ? 'Звонит в назначенное время' : 'Выключен для всех лекарств'}</div>
+          </div>
+          <Switch on={alarmsOn} onChange={onToggleAlarms} label="Будильник" />
+        </div>
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <button onClick={testSound} className="inline-flex items-center gap-2 rounded-full bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 px-4 py-2 text-sm font-medium transition active:scale-95">
+            <Icon name="volume" size={16} />Проверить звук
+          </button>
+          {tested === 'ok' && <span className="text-xs text-emerald-600 dark:text-emerald-400">Звук работает ✓</span>}
+          {tested === 'fail' && <span className="text-xs text-rose-500">Браузер не дал включить звук — проверьте беззвучный режим</span>}
+        </div>
+        <p className="mt-3 text-xs text-zinc-400 leading-relaxed">Будильник звонит, пока трекер открыт на экране. Если приложение закрыто или телефон заблокирован, сигнала не будет.</p>
+      </section>
+
+      <section>
+        <div className="flex items-center justify-between px-1 mb-2.5">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide"><Icon name="clock" size={16} />Расписание на сегодня</h2>
+          <span className="text-xs font-medium text-zinc-400 tabular-nums">{taken}/{doses.length}</span>
+        </div>
+        {!doses.length && <p className="px-1 text-sm text-zinc-500">Сегодня приёмов нет.</p>}
+        <div className="space-y-2.5">
+          {doses.map((d, i) => {
+            const done = !!log[d.key];
+            const missed = !done && d.time < hm;
+            const c = d.med.color;
+            return (
+              <div key={d.key} className={`fade-up flex items-center gap-3.5 rounded-2xl bg-white dark:bg-zinc-900 p-3.5 ring-1 ${missed ? 'ring-rose-200 dark:ring-rose-500/30' : 'ring-black/[.04] dark:ring-white/[.06]'}`} style={{ animationDelay: i * 40 + 'ms' }}>
+                <div className="w-14 shrink-0 text-center">
+                  <div className={`text-lg font-bold tabular-nums ${done ? 'text-zinc-400' : missed ? 'text-rose-500' : ''}`}>{d.time}</div>
+                  {d.med.alarm && alarmsOn && !done && <Icon name="bell" size={12} className="mx-auto text-amber-400" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className={`font-semibold truncate ${done ? 'text-zinc-400 line-through decoration-2' : ''}`} style={done ? { textDecorationColor: c + 'aa' } : undefined}>{d.med.name}</div>
+                  <div className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
+                    {d.med.dose}{d.med.note ? ` · ${d.med.note}` : ''}
+                    {done && typeof log[d.key] === 'string' && <span className="text-emerald-600 dark:text-emerald-400"> · принято в {log[d.key]}</span>}
+                    {missed && <span className="text-rose-500 font-medium"> · пропущено</span>}
+                  </div>
+                </div>
+                <button onClick={() => onTake(d.key)} aria-pressed={done} aria-label={done ? 'Отменить приём' : 'Отметить приём'}
+                  className={`shrink-0 h-10 rounded-full px-4 text-sm font-semibold transition active:scale-95 flex items-center gap-1.5 ${done ? 'text-white' : 'bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700'}`}
+                  style={done ? { background: c } : undefined}>
+                  {done ? <span className="pop grid place-items-center"><Icon name="check" size={18} stroke={3} /></span> : 'Принять'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section>
+        <div className="flex items-center justify-between px-1 mb-2.5">
+          <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide"><Icon name="pill" size={16} />Мои лекарства</h2>
+          <button onClick={onAdd} className="text-sm font-semibold text-violet-500 hover:text-violet-600 flex items-center gap-1"><Icon name="plus" size={16} />Добавить</button>
+        </div>
+        <div className="space-y-2.5">
+          {meds.map(m => (
+            <button key={m.id} onClick={() => onEdit(m)} className="w-full text-left flex items-center gap-3 rounded-2xl bg-white dark:bg-zinc-900 p-3.5 ring-1 ring-black/[.04] dark:ring-white/[.06] hover:-translate-y-0.5 transition">
+              <div className="w-10 h-10 rounded-full grid place-items-center shrink-0" style={{ background: m.color + '22', color: m.color }}><Icon name="pill" size={18} /></div>
+              <div className="min-w-0 flex-1">
+                <div className="font-semibold truncate">{m.name}</div>
+                <div className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{m.dose} · {m.times.join(', ')} · {m.days && m.days.length ? WD_ORDER.filter(x => m.days.includes(x)).map(x => WD[x]).join(', ') : 'каждый день'}</div>
+              </div>
+              <Icon name={m.alarm ? 'bell' : 'bellOff'} size={16} className={m.alarm ? 'text-amber-400' : 'text-zinc-300 dark:text-zinc-600'} />
+              <Icon name="pencil" size={16} className="text-zinc-400" />
+            </button>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function MedSheet({ initial, onClose, onSave, onDelete }) {
+  const [name, setName] = useState(initial ? initial.name : '');
+  const [dose, setDose] = useState(initial ? initial.dose : '1 таблетка');
+  const [note, setNote] = useState(initial ? initial.note || '' : '');
+  const [times, setTimes] = useState(initial ? initial.times : ['08:00']);
+  const [every, setEvery] = useState(!initial || !initial.days || !initial.days.length);
+  const [days, setDays] = useState(initial && initial.days && initial.days.length ? initial.days : [1, 2, 3, 4, 5]);
+  const [alarm, setAlarm] = useState(initial ? initial.alarm : true);
+  const [color, setColor] = useState(initial ? initial.color : PALETTE[3]);
+  const [err, setErr] = useState('');
+  const [confirmDel, setConfirmDel] = useState(false);
+  useEffect(() => {
+    const k = e => { if (e.key === 'Escape') onClose(); };
+    addEventListener('keydown', k); return () => removeEventListener('keydown', k);
+  }, []);
+  const submit = e => {
+    e.preventDefault();
+    if (!name.trim()) return setErr('Введите название лекарства');
+    const ts = [...new Set(times.filter(Boolean))].sort();
+    if (!ts.length) return setErr('Добавьте хотя бы одно время приёма');
+    if (!every && !days.length) return setErr('Выберите дни недели');
+    sound.unlock();
+    onSave({ ...(initial || {}), name: name.trim().slice(0, 60), dose: dose.trim() || '1 таблетка', note: note.trim().slice(0, 80), times: ts, days: every ? [] : days, alarm, color });
+  };
+  const label = 'block text-xs font-semibold uppercase tracking-wide text-zinc-400 mb-2';
+  const field = 'w-full rounded-2xl bg-zinc-100 dark:bg-zinc-800 px-4 py-3 text-[16px] outline-none ring-2 ring-transparent focus:ring-violet-300 dark:focus:ring-violet-500/60 transition placeholder:text-zinc-400';
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      <div className="fade-in absolute inset-0 bg-black/30 dark:bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <form onSubmit={submit} role="dialog" aria-modal="true" aria-label="Лекарство"
+        className="sheet-in relative w-full sm:max-w-md max-h-[92vh] overflow-y-auto rounded-t-[28px] sm:rounded-[28px] bg-white dark:bg-zinc-900 p-6 pb-8 shadow-2xl">
+        <div className="sm:hidden mx-auto -mt-2 mb-4 h-1.5 w-10 rounded-full bg-zinc-200 dark:bg-zinc-700" />
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-bold tracking-tight">{initial ? 'Лекарство' : 'Новое лекарство'}</h2>
+          <button type="button" onClick={onClose} aria-label="Закрыть" className="w-9 h-9 rounded-full grid place-items-center bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition"><Icon name="x" size={18} /></button>
+        </div>
+
+        <div className="mt-5">
+          <label className={label} htmlFor="mname">Название</label>
+          <input id="mname" value={name} onChange={e => { setName(e.target.value); setErr(''); }} maxLength={60} placeholder="Например, «Витамин D»" className={field} />
+        </div>
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          <div>
+            <label className={label} htmlFor="mdose">Дозировка</label>
+            <input id="mdose" value={dose} onChange={e => setDose(e.target.value)} maxLength={30} placeholder="1 таблетка" className={field} />
+          </div>
+          <div>
+            <label className={label} htmlFor="mnote">Заметка</label>
+            <input id="mnote" value={note} onChange={e => setNote(e.target.value)} maxLength={80} placeholder="после еды" className={field} />
+          </div>
+        </div>
+
+        <div className="mt-5">
+          <span className={label}>Время приёма</span>
+          <div className="space-y-2">
+            {times.map((t, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input type="time" value={t} onChange={e => { const v = e.target.value; setTimes(s => s.map((x, j) => j === i ? v : x)); setErr(''); }} className={`${field} tabular-nums`} aria-label={`Время ${i + 1}`} />
+                {times.length > 1 && <button type="button" onClick={() => setTimes(s => s.filter((_, j) => j !== i))} aria-label="Убрать время" className="w-11 h-11 shrink-0 rounded-full grid place-items-center bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-rose-500 transition"><Icon name="x" size={18} /></button>}
+              </div>
+            ))}
+          </div>
+          {times.length < 6 && <button type="button" onClick={() => setTimes(s => [...s, s.length ? (toMin(s[s.length - 1]) + 240 < 1440 ? `${pad(Math.floor((toMin(s[s.length - 1]) + 240) / 60))}:${pad((toMin(s[s.length - 1]) + 240) % 60)}` : '21:00') : '08:00'])}
+            className="mt-2 text-sm font-semibold text-violet-500 hover:text-violet-600 flex items-center gap-1"><Icon name="plus" size={16} />Ещё время</button>}
+        </div>
+
+        <div className="mt-5">
+          <span className={label}>Дни</span>
+          <div className="grid grid-cols-2 gap-1 rounded-2xl bg-zinc-100 dark:bg-zinc-800 p-1">
+            {[[true, 'Каждый день'], [false, 'По дням']].map(([v, l]) => (
+              <button type="button" key={l} onClick={() => setEvery(v)} className={`rounded-xl py-2 text-sm font-medium transition ${every === v ? 'bg-white dark:bg-zinc-700 shadow-sm' : 'text-zinc-500'}`}>{l}</button>
+            ))}
+          </div>
+          {!every && (
+            <div className="mt-3 flex justify-between gap-1 fade-in">
+              {WD_ORDER.map(d => {
+                const on = days.includes(d);
+                return <button type="button" key={d} onClick={() => setDays(s => on ? s.filter(x => x !== d) : [...s, d])}
+                  className={`w-10 h-10 rounded-full text-sm font-semibold transition active:scale-90 ${on ? 'bg-violet-500 text-white' : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400'}`}>{WD[d]}</button>;
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="mt-5 flex items-center justify-between rounded-2xl bg-zinc-100 dark:bg-zinc-800 px-4 py-3">
+          <span className="flex items-center gap-2 text-sm font-medium"><Icon name="alarm" size={18} className="text-amber-500" />Будильник</span>
+          <Switch on={alarm} onChange={setAlarm} label="Будильник для этого лекарства" />
+        </div>
+
+        <div className="mt-5">
+          <span className={label}>Цвет</span>
+          <div className="flex gap-2.5">
+            {PALETTE.map(c => (
+              <button type="button" key={c} onClick={() => setColor(c)} aria-label={`Цвет ${c}`}
+                className={`w-9 h-9 rounded-full transition ${color === c ? 'ring-4 ring-offset-2 ring-offset-white dark:ring-offset-zinc-900' : ''}`} style={{ background: c, '--tw-ring-color': c + '66' }} />
+            ))}
+          </div>
+        </div>
+
+        {err && <p className="mt-4 text-sm text-rose-500 fade-in">{err}</p>}
+        <button type="submit" className="mt-6 w-full rounded-2xl bg-violet-500 hover:bg-violet-600 active:scale-[.98] text-white py-3.5 font-semibold transition">
+          {initial ? 'Сохранить' : 'Добавить в расписание'}
+        </button>
+        {initial && (
+          <button type="button" onClick={() => confirmDel ? onDelete(initial.id) : setConfirmDel(true)}
+            className={`mt-2 w-full rounded-2xl py-3 text-sm font-semibold transition ${confirmDel ? 'bg-rose-500 text-white' : 'text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10'}`}>
+            {confirmDel ? 'Точно удалить?' : 'Удалить лекарство'}
+          </button>
+        )}
+      </form>
+    </div>
+  );
+}
+
+function AlarmModal({ items, onTake, onSnooze, onStop }) {
+  return (
+    <div className="fixed inset-0 z-[65] flex items-center justify-center p-5">
+      <div className="fade-in absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <div role="alertdialog" aria-modal="true" aria-label="Пора принять лекарство" className="sheet-in relative w-full max-w-sm rounded-[28px] bg-white dark:bg-zinc-900 p-6 shadow-2xl">
+        <div className="mx-auto w-16 h-16 rounded-full grid place-items-center bg-amber-100 text-amber-500 dark:bg-amber-400/15 flame"><Icon name="alarm" size={32} /></div>
+        <h3 className="mt-3 text-center text-xl font-extrabold tracking-tight">Пора принять</h3>
+        <div className="mt-4 space-y-2.5">
+          {items.map(d => (
+            <div key={d.key} className="rounded-2xl bg-zinc-50 dark:bg-zinc-800 p-3.5">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full grid place-items-center shrink-0" style={{ background: d.med.color + '22', color: d.med.color }}><Icon name="pill" size={18} /></div>
+                <div className="min-w-0 flex-1">
+                  <div className="font-semibold truncate">{d.med.name}</div>
+                  <div className="text-xs text-zinc-500 dark:text-zinc-400">{d.time} · {d.med.dose}{d.med.note ? ` · ${d.med.note}` : ''}</div>
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <button onClick={() => onSnooze(d.key)} className="rounded-xl bg-white dark:bg-zinc-700 ring-1 ring-black/5 dark:ring-white/10 py-2.5 text-sm font-semibold transition active:scale-95">Через 10 мин</button>
+                <button onClick={() => onTake(d.key)} className="rounded-xl text-white py-2.5 text-sm font-semibold transition active:scale-95" style={{ background: d.med.color }}>Принял(а)</button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <button onClick={onStop} className="mt-4 w-full rounded-2xl py-3 text-sm font-semibold text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition">Выключить</button>
+      </div>
+    </div>
+  );
+}
+
+function NewMedalModal({ n, onClose }) {
+  useEffect(() => {
+    const k = e => { if (e.key === 'Escape') onClose(); };
+    addEventListener('keydown', k); return () => removeEventListener('keydown', k);
+  }, []);
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-6">
+      <div className="fade-in absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div role="dialog" aria-modal="true" className="sheet-in relative w-full max-w-xs rounded-[28px] bg-white dark:bg-zinc-900 p-6 text-center shadow-2xl">
+        <p className="text-xs font-bold uppercase tracking-widest text-amber-500">Новая медаль!</p>
+        <div className="mt-3 flex justify-center pop"><Medal n={n} unlocked size={130} /></div>
+        <h3 className="mt-2 text-xl font-extrabold tracking-tight">Вы продержались</h3>
+        <p className="text-zinc-500 dark:text-zinc-400">{n} {daysWord(n)}</p>
+        <button onClick={onClose} className="mt-5 w-full rounded-2xl bg-indigo-500 hover:bg-indigo-600 active:scale-[.98] text-white py-3 font-semibold transition">Отлично!</button>
+      </div>
+    </div>
+  );
+}
+
+function ArchiveView({ habits, onRestore, onDelete }) {
+  const list = habits.filter(h => h.archived);
+  const [confirm, setConfirm] = useState(null);
+  if (!list.length) return (
+    <div className={`${card} p-8 text-center fade-up`}>
+      <div className="mx-auto w-14 h-14 rounded-2xl grid place-items-center bg-zinc-100 text-zinc-400 dark:bg-zinc-800"><Icon name="archive" size={26} /></div>
+      <p className="mt-4 font-semibold">Архив пуст</p>
+      <p className="mt-1 text-sm text-zinc-500">Сюда попадают привычки, которые вы поставили на паузу. История при этом сохраняется.</p>
+    </div>
+  );
+  return (
+    <div className="space-y-2.5">
+      {list.map((h, i) => {
+        const cat = CATS[h.category] || CATS.health;
+        const total = Object.keys(h.history).length;
+        return (
+          <div key={h.id} className="fade-up flex items-center gap-3 rounded-2xl bg-white dark:bg-zinc-900 p-4 ring-1 ring-black/[.04] dark:ring-white/[.06]" style={{ animationDelay: i * 40 + 'ms' }}>
+            <div className="w-10 h-10 rounded-full grid place-items-center shrink-0" style={{ background: cat.hex + '22', color: cat.hex }}><Icon name={cat.icon} size={18} /></div>
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold truncate">{h.name}</div>
+              <div className="text-xs text-zinc-400">{cat.label} · {freqText(h)} · {total} {plural(total, ['отметка', 'отметки', 'отметок'])}</div>
+            </div>
+            <button onClick={() => onRestore(h.id)} title="Вернуть" aria-label="Вернуть из архива" className="w-9 h-9 rounded-full grid place-items-center text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-400/10 transition"><Icon name="restore" size={18} /></button>
+            {confirm === h.id
+              ? <button onClick={() => onDelete(h.id)} className="rounded-full bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold px-3 py-2 transition">Удалить?</button>
+              : <button onClick={() => setConfirm(h.id)} title="Удалить" aria-label="Удалить" className="w-9 h-9 rounded-full grid place-items-center text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition"><Icon name="trash" size={18} /></button>}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function AddSheet({ onClose, onAdd }) {
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('health');
+  const [freq, setFreq] = useState('daily');
+  const [days, setDays] = useState([1, 3, 5]);
+  const [times, setTimes] = useState(3);
+  const [tod, setTod] = useState('any');
+  const [err, setErr] = useState('');
+  const input = useRef(null);
+  useEffect(() => {
+    setTimeout(() => input.current && input.current.focus(), 80);
+    const k = e => { if (e.key === 'Escape') onClose(); };
+    addEventListener('keydown', k); return () => removeEventListener('keydown', k);
+  }, []);
+  const submit = e => {
+    e.preventDefault();
+    if (!name.trim()) return setErr('Введите название привычки');
+    if (freq === 'days' && !days.length) return setErr('Выберите хотя бы один день недели');
+    onAdd({ name: name.trim().slice(0, 60), category, freq, days: freq === 'days' ? days : [], times, timeOfDay: tod });
+  };
+  const label = 'block text-xs font-semibold uppercase tracking-wide text-zinc-400 mb-2';
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+      <div className="fade-in absolute inset-0 bg-black/30 dark:bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <form onSubmit={submit} role="dialog" aria-modal="true" aria-label="Новая привычка"
+        className="sheet-in relative w-full sm:max-w-md max-h-[92vh] overflow-y-auto rounded-t-[28px] sm:rounded-[28px] bg-white dark:bg-zinc-900 p-6 pb-8 shadow-2xl">
+        <div className="sm:hidden mx-auto -mt-2 mb-4 h-1.5 w-10 rounded-full bg-zinc-200 dark:bg-zinc-700" />
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-bold tracking-tight">Новая привычка</h2>
+          <button type="button" onClick={onClose} aria-label="Закрыть" className="w-9 h-9 rounded-full grid place-items-center bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition"><Icon name="x" size={18} /></button>
+        </div>
+
+        <div className="mt-5">
+          <label className={label} htmlFor="hname">Название</label>
+          <input id="hname" ref={input} value={name} onChange={e => { setName(e.target.value); setErr(''); }} maxLength={60}
+            placeholder="Например, «Пройти 8 000 шагов»"
+            className="w-full rounded-2xl bg-zinc-100 dark:bg-zinc-800 px-4 py-3.5 text-[16px] outline-none ring-2 ring-transparent focus:ring-indigo-300 dark:focus:ring-indigo-500/60 transition placeholder:text-zinc-400" />
+        </div>
+
+        <div className="mt-5">
+          <span className={label}>Категория</span>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(CATS).map(([k, c]) => (
+              <Pill key={k} active={category === k} color={c.hex} onClick={() => setCategory(k)}><Icon name={c.icon} size={15} />{c.label}</Pill>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-5">
+          <span className={label}>Частота</span>
+          <div className="grid grid-cols-3 gap-1 rounded-2xl bg-zinc-100 dark:bg-zinc-800 p-1">
+            {[['daily', 'Ежедневно'], ['days', 'По дням'], ['times', 'X раз/нед']].map(([k, l]) => (
+              <button type="button" key={k} onClick={() => { setFreq(k); setErr(''); }}
+                className={`rounded-xl py-2 text-sm font-medium transition ${freq === k ? 'bg-white dark:bg-zinc-700 shadow-sm' : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'}`}>{l}</button>
+            ))}
+          </div>
+          {freq === 'days' && (
+            <div className="mt-3 flex justify-between gap-1 fade-in">
+              {WD_ORDER.map(d => {
+                const on = days.includes(d);
+                return <button type="button" key={d} onClick={() => { setDays(s => on ? s.filter(x => x !== d) : [...s, d]); setErr(''); }}
+                  className={`w-10 h-10 rounded-full text-sm font-semibold transition active:scale-90 ${on ? 'bg-indigo-500 text-white shadow-sm' : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'}`}>{WD[d]}</button>;
+              })}
+            </div>
+          )}
+          {freq === 'times' && (
+            <div className="mt-3 flex items-center justify-between rounded-2xl bg-zinc-100 dark:bg-zinc-800 px-4 py-2.5 fade-in">
+              <span className="text-sm text-zinc-600 dark:text-zinc-300">Раз в неделю</span>
+              <div className="flex items-center gap-3">
+                <button type="button" aria-label="Меньше" onClick={() => setTimes(t => Math.max(1, t - 1))} className="w-8 h-8 rounded-full grid place-items-center bg-white dark:bg-zinc-700 shadow-sm active:scale-90 transition"><Icon name="minus" size={16} /></button>
+                <span className="w-5 text-center font-bold tabular-nums">{times}</span>
+                <button type="button" aria-label="Больше" onClick={() => setTimes(t => Math.min(6, t + 1))} className="w-8 h-8 rounded-full grid place-items-center bg-white dark:bg-zinc-700 shadow-sm active:scale-90 transition"><Icon name="plus" size={16} /></button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-5">
+          <span className={label}>Время суток</span>
+          <div className="grid grid-cols-4 gap-2">
+            {TIME_ORDER.map(t => (
+              <button type="button" key={t} onClick={() => setTod(t)}
+                className={`flex flex-col items-center gap-1 rounded-2xl py-2.5 text-xs font-medium transition active:scale-95 ${tod === t ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900' : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'}`}>
+                <Icon name={TIMES[t].icon} size={18} />{t === 'any' ? 'Любое' : TIMES[t].label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {err && <p className="mt-4 text-sm text-rose-500 fade-in">{err}</p>}
+        <button type="submit" className="mt-6 w-full rounded-2xl bg-indigo-500 hover:bg-indigo-600 active:scale-[.98] text-white py-3.5 font-semibold transition shadow-[0_10px_24px_-10px_rgba(99,102,241,.8)]">
+          Добавить привычку
+        </button>
+      </form>
+    </div>
+  );
+}
+
+/* ---------- Приложение ---------- */
+function App() {
+  const [state, setState] = useState(load);
+  const { habits, theme } = state;
+  const [tab, setTab] = useState('today');
+  const [showAdd, setShowAdd] = useState(false);
+  const [newMedal, setNewMedal] = useState(null);
+  const [medSheet, setMedSheet] = useState(null); // null | 'new' | med
+  const [ringing, setRinging] = useState([]);
+  const [now, setNow] = useState(new Date());
+  const meds = state.meds || [], medLog = state.medLog || {}, alarmsOn = state.alarmsOn !== false;
+
+  // Будильник: проверяем расписание каждые 10 секунд
+  const stRef = useRef(state); stRef.current = state;
+  const fired = useRef(new Set());
+  const snoozes = useRef({});
+  useEffect(() => {
+    const tick = () => {
+      const s = stRef.current;
+      if (s.alarmsOn === false) return;
+      const d = new Date(), k = keyOf(d), hm = hmOf(d), due = [];
+      for (const m of s.meds || []) {
+        if (!m.alarm || !medToday(m, d)) continue;
+        for (const t of m.times) {
+          const dk = `${m.id}@${t}`;
+          if (s.medLog && s.medLog[k] && s.medLog[k][dk]) continue;
+          const eff = snoozes.current[`${k}|${dk}`] || t, fk = `${k}|${dk}|${eff}`;
+          const late = toMin(hm) - toMin(eff);
+          if (late >= 0 && late <= 30 && !fired.current.has(fk)) { fired.current.add(fk); due.push({ med: m, time: t, key: dk }); }
+        }
+      }
+      if (due.length) setRinging(r => [...r.filter(x => !due.some(y => y.key === x.key)), ...due]);
+    };
+    tick();
+    const i = setInterval(tick, 10000);
+    const vis = () => { if (!document.hidden) tick(); };
+    document.addEventListener('visibilitychange', vis);
+    return () => { clearInterval(i); document.removeEventListener('visibilitychange', vis); };
+  }, []);
+  useEffect(() => {
+    if (!ringing.length) return;
+    const title = document.title;
+    let n = 0;
+    const ring = () => {
+      n++;
+      if (n <= 60) { sound.beep(); if (navigator.vibrate) try { navigator.vibrate([300, 150, 300]); } catch (e) {} }
+      document.title = n % 2 ? '⏰ Пора принять таблетки' : title;
+    };
+    ring();
+    const i = setInterval(ring, 1500);
+    return () => { clearInterval(i); document.title = title; };
+  }, [ringing.length]);
+
+  useEffect(() => {
+    const upd = () => setNow(new Date());
+    const t = setInterval(upd, 30000);
+    document.addEventListener('visibilitychange', upd);
+    return () => { clearInterval(t); document.removeEventListener('visibilitychange', upd); };
+  }, []);
+  // приложение для компьютера: изменения с другого устройства (iPhone) приходят сюда
+  useEffect(() => { sync.onRemote = s => setState(normalize(s)); return () => { sync.onRemote = null; }; }, []);
+  useEffect(() => { save(state); }, [state]);
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const apply = () => document.documentElement.classList.toggle('dark', theme === 'dark' || (theme === 'auto' && mq.matches));
+    apply();
+    mq.addEventListener && mq.addEventListener('change', apply);
+    return () => mq.removeEventListener && mq.removeEventListener('change', apply);
+  }, [theme]);
+
+  const setHabits = fn => setState(s => ({ ...s, habits: fn(s.habits) }));
+  const todayK = keyOf(now);
+
+  const toggle = (id, el) => {
+    const h = habits.find(x => x.id === id); if (!h) return;
+    const willDone = !h.history[todayK];
+    const next = habits.map(x => {
+      if (x.id !== id) return x;
+      const history = { ...x.history };
+      if (willDone) history[todayK] = true; else delete history[todayK];
+      return { ...x, history };
+    });
+    setHabits(() => next);
+    if (willDone) {
+      const cat = CATS[h.category] || CATS.health;
+      if (el) { const r = el.getBoundingClientRect(); confetti(r.left + r.width / 2, r.top + r.height / 2, 22, [cat.hex, '#fbbf24', '#ffffff', cat.hex], 0.8); }
+      const before = Math.max(pointsOf(habits), state.medalSeen || 0), after = pointsOf(next);
+      const earned = [...MEDALS].reverse().find(m => m > before && m <= after);
+      if (earned) setState(s => ({ ...s, medalSeen: Math.max(s.medalSeen || 0, earned) }));
+      const p = dayProgress(todayItems(next, now));
+      if (earned) {
+        setTimeout(() => { setNewMedal(earned); confetti(innerWidth / 2, innerHeight * 0.3, 190, ['#fbbf24', '#f59e0b', '#fde68a', ...PALETTE], 1.8); }, 300);
+      } else if (p.total > 0 && p.done === p.total) setTimeout(() => confetti(innerWidth / 2, innerHeight * 0.35, 170, PALETTE, 1.7), 250);
+      if (navigator.vibrate) try { navigator.vibrate(12); } catch (e) {}
+    }
+  };
+  const archive = id => setHabits(hs => hs.map(h => h.id === id ? { ...h, archived: true } : h));
+  const restore = id => setHabits(hs => hs.map(h => h.id === id ? { ...h, archived: false } : h));
+  const remove = id => setHabits(hs => hs.filter(h => h.id !== id));
+  const add = data => {
+    setHabits(hs => [...hs, { id: uid(), ...data, createdAt: todayK, archived: false, history: {} }]);
+    setShowAdd(false); setTab('today');
+  };
+  const takeMed = key => setState(s => {
+    const d = new Date(), k = keyOf(d);
+    const log = { ...(s.medLog || {}) }, day = { ...(log[k] || {}) };
+    if (day[key]) delete day[key]; else day[key] = hmOf(d);
+    log[k] = day;
+    return { ...s, medLog: log };
+  });
+  const takeFromAlarm = key => {
+    const k = keyOf(new Date());
+    if (!(medLog[k] && medLog[k][key])) takeMed(key);
+    setRinging(r => r.filter(x => x.key !== key));
+  };
+  const snooze = key => {
+    const d = new Date(Date.now() + 10 * 60000);
+    snoozes.current[`${keyOf(new Date())}|${key}`] = keyOf(d) === keyOf(new Date()) ? hmOf(d) : '23:59';
+    setRinging(r => r.filter(x => x.key !== key));
+  };
+  const saveMed = m => {
+    setState(s => {
+      const list = s.meds || [];
+      return { ...s, meds: m.id ? list.map(x => x.id === m.id ? m : x) : [...list, { ...m, id: uid() }] };
+    });
+    setMedSheet(null);
+  };
+  const deleteMed = id => { setState(s => ({ ...s, meds: (s.meds || []).filter(x => x.id !== id) })); setMedSheet(null); };
+  const openNew = () => tab === 'pills' ? setMedSheet('new') : setShowAdd(true);
+  const cycleTheme = () => setState(s => ({ ...s, theme: s.theme === 'auto' ? 'light' : s.theme === 'light' ? 'dark' : 'auto' }));
+
+  const hour = now.getHours();
+  const greeting = hour < 5 ? 'Доброй ночи' : hour < 12 ? 'Доброе утро' : hour < 18 ? 'Добрый день' : 'Добрый вечер';
+  const dateStr = now.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
+  const archivedCount = habits.filter(h => h.archived).length;
+  const tabs = [['today', 'Сегодня', 'listChecks'], ['pills', 'Таблетки', 'pill'], ['medals', 'Медали', 'medal'], ['stats', 'Статистика', 'chart'], ['archive', 'Архив', 'archive']];
+  const points = pointsOf(habits);
+  const themeIcon = theme === 'auto' ? 'monitor' : theme === 'light' ? 'sun' : 'moon';
+  const themeLabel = theme === 'auto' ? 'Тема: авто' : theme === 'light' ? 'Тема: светлая' : 'Тема: тёмная';
+
+  return (
+    <div className="min-h-screen">
+      <div className="mx-auto max-w-2xl px-4 sm:px-6 pt-6 sm:pt-12 pb-32">
+        <header className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-zinc-400 dark:text-zinc-500 first-letter:uppercase">{dateStr}</p>
+            <h1 className="mt-0.5 text-3xl sm:text-4xl font-extrabold tracking-tight">{greeting}</h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={openNew} className={`hidden sm:inline-flex items-center gap-2 rounded-full text-white pl-3.5 pr-4 h-10 text-sm font-semibold transition active:scale-95 shadow-[0_8px_20px_-8px_rgba(99,102,241,.8)] ${tab === 'pills' ? 'bg-violet-500 hover:bg-violet-600' : 'bg-indigo-500 hover:bg-indigo-600'}`}>
+              <Icon name="plus" size={18} stroke={2.5} />{tab === 'pills' ? 'Лекарство' : 'Новая привычка'}
+            </button>
+            <button onClick={() => setTab('medals')} title="Баллы за активность" aria-label={`Баллы: ${points}`}
+              className="h-10 rounded-full inline-flex items-center gap-1.5 pl-2.5 pr-3.5 bg-white dark:bg-zinc-900 ring-1 ring-black/5 dark:ring-white/10 font-bold tabular-nums hover:scale-105 active:scale-95 transition">
+              <Icon name="star" size={18} className="text-amber-400" fill="currentColor" />{points}
+            </button>
+            <button onClick={cycleTheme} title={themeLabel} aria-label={themeLabel}
+              className="w-10 h-10 rounded-full grid place-items-center bg-white dark:bg-zinc-900 ring-1 ring-black/5 dark:ring-white/10 text-zinc-600 dark:text-zinc-300 hover:scale-105 active:scale-95 transition">
+              <span key={themeIcon} className="pop grid place-items-center"><Icon name={themeIcon} size={18} /></span>
+            </button>
+          </div>
+        </header>
+
+        <nav className="mt-6 grid grid-cols-5 gap-1 rounded-2xl bg-zinc-200/60 dark:bg-zinc-900 p-1" role="tablist">
+          {tabs.map(([k, l, ic]) => (
+            <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+              className={`min-w-0 flex flex-col lg:flex-row items-center justify-center gap-0.5 lg:gap-1.5 rounded-xl py-1.5 lg:py-2 text-[10px] sm:text-xs lg:text-sm font-semibold transition-all ${tab === k ? 'bg-white dark:bg-zinc-700 shadow-sm text-zinc-900 dark:text-white' : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'}`}>
+              <Icon name={ic} size={16} /><span>{l}</span>
+              {k === 'archive' && archivedCount > 0 && <span className="hidden sm:inline text-[11px] font-bold rounded-full bg-zinc-300/70 dark:bg-zinc-600 px-1.5">{archivedCount}</span>}
+            </button>
+          ))}
+        </nav>
+
+        <main className="mt-6" key={tab}>
+          {tab === 'today' && <TodayView habits={habits} now={now} onToggle={toggle} onArchive={archive} onDelete={remove} onAdd={() => setShowAdd(true)} />}
+          {tab === 'pills' && <PillsView meds={meds} medLog={medLog} now={now} alarmsOn={alarmsOn}
+            onToggleAlarms={v => { sound.unlock(); setState(s => ({ ...s, alarmsOn: v })); }}
+            onTake={takeMed} onAdd={() => setMedSheet('new')} onEdit={m => setMedSheet(m)} />}
+          {tab === 'medals' && <MedalsView habits={habits} />}
+          {tab === 'stats' && <StatsView habits={habits} now={now} />}
+          {tab === 'archive' && <ArchiveView habits={habits} onRestore={restore} onDelete={remove} />}
+        </main>
+      </div>
+
+      <button onClick={openNew} aria-label={tab === 'pills' ? 'Новое лекарство' : 'Новая привычка'}
+        className={`sm:hidden fixed right-5 bottom-6 z-40 w-14 h-14 rounded-full ${tab === 'pills' ? 'bg-violet-500' : 'bg-indigo-500'} text-white grid place-items-center shadow-[0_12px_28px_-8px_rgba(99,102,241,.9)] active:scale-90 transition`}
+        style={{ marginBottom: 'env(safe-area-inset-bottom)' }}>
+        <Icon name="plus" size={26} stroke={2.5} />
+      </button>
+
+      {showAdd && <AddSheet onClose={() => setShowAdd(false)} onAdd={add} />}
+      {newMedal && <NewMedalModal n={newMedal} onClose={() => setNewMedal(null)} />}
+      {medSheet && <MedSheet initial={medSheet === 'new' ? null : medSheet} onClose={() => setMedSheet(null)} onSave={saveMed} onDelete={deleteMed} />}
+      {ringing.length > 0 && <AlarmModal items={ringing} onTake={takeFromAlarm} onSnooze={snooze} onStop={() => setRinging([])} />}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

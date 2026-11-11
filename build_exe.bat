@@ -3,6 +3,9 @@ chcp 65001 >nul
 REM Сборка HabitTracker.exe и установщика HabitTracker-Setup.exe
 cd /d "%~dp0"
 python -m pip install pyinstaller || goto :err
+where node >nul 2>nul && (
+  pushd web && call npm ci --no-audit --no-fund && node build.mjs && popd
+) || echo Node.js не найден — используется готовая app\index.html
 if not exist build mkdir build
 python habit_app.py --make-ico build\habit.ico || goto :err
 pyinstaller --noconfirm --onefile --name HabitTracker --icon build\habit.ico --add-data "app;app" habit_app.py || goto :err

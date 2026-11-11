@@ -1,8 +1,10 @@
-"""Проверка трекера в настоящем браузере (Playwright): добавление, отметки, серия, сохранение, второе устройство.
+"""Проверка трекера в настоящем браузере (Playwright). Приложение должно быть запущено на пустых данных.
 
     python tools/check_app.py [http://127.0.0.1:8770/] [папка_для_скриншотов]
 
-Приложение должно быть уже запущено. Сценарий работает на пустых данных.
+Проверяет: привычки и отметки, медали (без повторной выдачи), меню «⋯», таблетки и будильник
+(в том числе когда вкладка «спала» в минуту приёма и перенос «Через 10 мин»), сохранение в файл,
+работу с двух устройств одновременно (объединение изменений).
 """
 import datetime
 import json
@@ -15,11 +17,23 @@ from playwright.sync_api import sync_playwright
 URL = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8770/"
 OUT = Path(sys.argv[2] if len(sys.argv) > 2 else "check_out")
 OUT.mkdir(parents=True, exist_ok=True)
+TODAY = datetime.date.today()
+AT = lambda h, m: datetime.datetime(TODAY.year, TODAY.month, TODAY.day, h, m, 0)  # noqa: E731
+
+results, errors = [], []
 
 
 def state():
     with urllib.request.urlopen(URL + "api/state") as r:
         return json.loads(r.read().decode("utf-8"))
+
+
+def step(name, fn):
+    try:
+        fn()
+        results.append(("OK", name, ""))
+    except Exception as e:  # noqa: BLE001
+        results.append(("FAIL", name, str(e).split("\n")[0][:300]))
 
 
 def launch(p):
@@ -31,78 +45,128 @@ def launch(p):
     raise RuntimeError("не удалось запустить браузер")
 
 
-errors = []
+def watch(pg, tag):
+    pg.on("pageerror", lambda e: errors.append(f"{tag}: {e}"))
+    pg.on("console", lambda m: m.type == "error" and "fonts.g" not in m.text and "409" not in m.text and errors.append(f"{tag}: {m.text}"))
+
+
+def ringing(pg):
+    return pg.locator("text=Пора принять").count() > 0
+
+
 with sync_playwright() as p:
     br = launch(p)
-    pg = br.new_page(viewport={"width": 1100, "height": 900})
-    pg.on("pageerror", lambda e: errors.append(str(e)))
+    pg = br.new_context(viewport={"width": 1100, "height": 900}).new_page()
+    watch(pg, "компьютер")
+    pg.clock.install(time=AT(7, 58))
     pg.goto(URL)
-    pg.wait_for_selector("text=Начните с первой привычки")
+    pg.wait_for_selector("text=Прогресс за сегодня")
+    water = 'button[aria-label$=": Выпить стакан воды"]'
 
-    # готовая привычка с количеством и своя привычка
-    pg.click("button.tpl:has-text('Пить воду')")
-    pg.click("button[data-a=add]")
-    pg.fill("#fName", "Зарядка утром")
-    pg.click(".dlg button.chip.emo >> nth=2")
-    start = (datetime.date.today() - datetime.timedelta(days=3)).isoformat()
-    pg.fill("#fCreated", start)
-    pg.click(".dlg button:has-text('Добавить')")
-    pg.wait_for_selector(".card:has-text('Зарядка утром')")
+    def first_mark():
+        pg.click(water)
+        pg.wait_for_selector("text=Новая медаль!", timeout=3000)
+        pg.screenshot(path=str(OUT / "medal.png"))
+        pg.click("text=Отлично!")
+    step("отметка привычки и медаль «1 день»", first_mark)
 
-    # отметить «Зарядку» и выпить 8 стаканов
-    pg.click(".card:has-text('Зарядка утром') button.check")
-    for _ in range(8):
-        pg.click(".card:has-text('Пить воду') button[data-a=inc]")
-    pg.wait_for_selector("text=2 из 2 выполнено")
+    def medal_once():
+        pg.click(water)
+        pg.wait_for_timeout(200)
+        pg.click(water)
+        pg.wait_for_timeout(700)
+        assert pg.locator("text=Новая медаль!").count() == 0, "медаль выдана повторно"
+    step("медаль не выдаётся повторно после снятия и новой отметки", medal_once)
 
-    # вчерашний день — для серии
-    pg.click("button[data-a=prev]")
-    pg.click(".card:has-text('Зарядка утром') button.check")
-    pg.wait_for_timeout(1200)
+    def menu_close():
+        pg.locator('button[aria-label="Действия"]').nth(1).click()
+        pg.wait_for_selector("text=В архив", timeout=2000)
+        pg.mouse.click(15, 880)
+        pg.wait_for_timeout(300)
+        assert pg.locator("text=В архив").count() == 0, "меню не закрылось"
+    step("меню «⋯» закрывается кликом мимо", menu_close)
 
-    st = state()
-    names = [h["name"] for h in st["habits"]]
-    assert names == ["Пить воду", "Зарядка утром"], names
-    water = st["habits"][0]["id"]
-    assert max(st["done"][water].values()) == 8, st["done"]
-    print("Сохранено на сервере, ревизия", st["rev"])
+    def add_habit():
+        pg.click("button:has-text('Новая привычка')")
+        pg.fill("#hname", "Прогулка")
+        pg.click("button:has-text('X раз/нед')")
+        pg.click("button:has-text('Добавить привычку')")
+        pg.wait_for_selector("text=Прогулка", timeout=2000)
+    step("добавление привычки «X раз в неделю»", add_habit)
 
-    # второе устройство видит те же данные и вносит изменение
-    pg2 = br.new_page(viewport={"width": 390, "height": 844}, device_scale_factor=2)
-    pg2.goto(URL)
-    pg2.wait_for_selector(".card:has-text('Зарядка утром')")
-    pg2.click(".card:has-text('Пить воду') button[data-a=dec]")
-    pg2.wait_for_timeout(1200)
-    pg2.screenshot(path=str(OUT / "phone-today.png"), full_page=True)
+    def add_med():
+        pg.click('role=tab[name="Таблетки"]')
+        pg.click("button:has-text('Добавить лекарство')")
+        pg.fill("#mname", "Витамин D")
+        pg.fill('input[aria-label="Время 1"]', "08:00")
+        pg.click("button:has-text('Добавить в расписание')")
+        pg.wait_for_selector("text=Расписание на сегодня", timeout=2000)
+    step("добавление лекарства на 08:00", add_med)
 
-    # первое устройство меняет данные со старой ревизией — конфликт должен разрешиться без потерь
-    pg.click("button[data-a=next]")
-    pg.click("button[data-a=add]")
-    pg.fill("#fName", "Чтение")
-    pg.click(".dlg button:has-text('Добавить')")
+    def alarm_sleep():
+        pg.clock.fast_forward("03:00")   # вкладка «спала» с 07:58 до 08:01
+        pg.wait_for_timeout(400)
+        assert ringing(pg), "будильник не сработал"
+        pg.screenshot(path=str(OUT / "alarm.png"))
+    step("будильник срабатывает, даже если вкладка спала в 08:00", alarm_sleep)
+
+    def snooze():
+        pg.click("button:has-text('Через 10 мин')")
+        pg.wait_for_timeout(200)
+        assert not ringing(pg)
+        for _ in range(64):
+            pg.clock.run_for(10_000)
+        pg.wait_for_timeout(300)
+        assert ringing(pg), "не зазвонил через 10 минут"
+        pg.click("button:has-text('Принял(а)')")
+        pg.wait_for_selector("text=Принято 1", timeout=2000)
+    step("«Через 10 мин» и «Принял(а)»", snooze)
+
     pg.wait_for_timeout(1500)
     st = state()
-    assert [h["name"] for h in st["habits"]] == ["Пить воду", "Зарядка утром", "Чтение"], st["habits"]
-    assert max(st["done"][water].values()) == 7, "изменение со второго устройства потерялось"
-    print("Изменения с двух устройств объединены")
+    step("данные сохранены в habits.json", lambda: (
+        len(st["habits"]) == 5 and st["meds"][0]["name"] == "Витамин D" and st["medalSeen"] == 1) or (_ for _ in ()).throw(
+        AssertionError(f"на сервере: {len(st['habits'])} привычек, meds={st.get('meds')}, medalSeen={st.get('medalSeen')}")))
 
-    pg.screenshot(path=str(OUT / "today.png"), full_page=True)
-    pg.click("nav button[data-v=week]")
-    pg.wait_for_selector(".wk table")
-    pg.screenshot(path=str(OUT / "week.png"), full_page=True)
-    pg.click("nav button[data-v=stats]")
-    pg.wait_for_selector(".hcard")
-    streak = pg.locator(".hcard:has-text('Зарядка утром') .nums b").first.inner_text()
-    assert streak == "2", f"серия должна быть 2, а показано {streak}"
-    pg.screenshot(path=str(OUT / "stats.png"), full_page=True)
-    pg.click("nav button[data-v=manage]")
-    pg.screenshot(path=str(OUT / "manage.png"), full_page=True)
+    for tab, name in (("Медали", "medals"), ("Статистика", "stats"), ("Архив", "archive"), ("Сегодня", "today")):
+        step(f"вкладка «{tab}»", lambda tab=tab, name=name: (
+            pg.click(f'role=tab[name="{tab}"]'), pg.wait_for_timeout(300),
+            pg.screenshot(path=str(OUT / f"{name}.png"), full_page=True)))
 
-    # после перезагрузки всё на месте
-    pg.reload()
-    pg.wait_for_selector(".card:has-text('Чтение')")
+    # второе устройство (iPhone)
+    ph = br.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2, has_touch=True).new_page()
+    watch(ph, "телефон")
+    ph.goto(URL)
+    ph.wait_for_selector("text=Прогулка")
+
+    def two_devices():
+        # телефон отмечает «Утреннюю зарядку», компьютер одновременно (со старыми данными) — «Чтение»
+        ph.click('button[aria-label$=": Утренняя зарядка"]')
+        pg.click('button[aria-label$=": Чтение 20 минут"]')
+        ph.wait_for_timeout(2500)
+        pg.wait_for_timeout(2500)
+        h = {x["name"]: x for x in state()["habits"]}
+        k = TODAY.isoformat()
+        assert h["Утренняя зарядка"]["history"].get(k) and h["Чтение 20 минут"]["history"].get(k), \
+            "одно из одновременных изменений потерялось"
+        ph.reload()
+        ph.wait_for_selector("text=Прогресс за сегодня")
+        assert ph.locator('button[aria-label="Снять отметку: Чтение 20 минут"]').count() == 1, "телефон не видит отметку с компьютера"
+        ph.screenshot(path=str(OUT / "phone.png"))
+    step("одновременные изменения с двух устройств объединяются", two_devices)
+
+    def persist():
+        pg.reload()
+        pg.wait_for_selector("text=Прогулка")
+        assert pg.locator('button[aria-label="Снять отметку: Утренняя зарядка"]').count() == 1
+    step("после перезапуска страницы всё на месте", persist)
     br.close()
 
+bad = [r for r in results if r[0] != "OK"]
+for r in results:
+    print(f"{r[0]:4} {r[1]}" + (f" — {r[2]}" if r[2] else ""))
 if errors:
-    raise SystemExit("Ошибки JavaScript на странице:\n" + "\n".join(errors))
+    print("Ошибки на странице:\n  " + "\n  ".join(sorted(set(errors))))
+if bad or errors:
+    raise SystemExit(1)
 print("OK: трекер работает, скриншоты в", OUT)

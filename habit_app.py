@@ -74,15 +74,13 @@ LOCK = threading.Lock()
 
 
 def empty_state() -> dict:
-    return {"version": 1, "rev": 0, "habits": [], "done": {}, "settings": {}}
+    return {"rev": 0, "habits": []}
 
 
 def load_state() -> dict:
     try:
         st = json.loads(DATA_FILE.read_text(encoding="utf-8"))
         if isinstance(st, dict) and isinstance(st.get("habits"), list):
-            st.setdefault("done", {})
-            st.setdefault("settings", {})
             st.setdefault("rev", 0)
             return st
     except FileNotFoundError:
@@ -171,15 +169,21 @@ def write_ico(path: Path):
 
 MANIFEST = {
     "name": APP_NAME, "short_name": "Привычки", "start_url": "./", "display": "standalone",
-    "background_color": "#101820", "theme_color": "#101820", "lang": "ru",
+    "background_color": "#f5f5f7", "theme_color": "#f5f5f7", "lang": "ru",
     "icons": [{"src": "icon-192.png", "sizes": "192x192", "type": "image/png"},
               {"src": "icon-512.png", "sizes": "512x512", "type": "image/png"}],
 }
 
 
 def page_html() -> bytes:
+    """Страница трекера + сохранённые данные, чтобы она сразу открылась с ними."""
     html = (APP_DIR / "index.html").read_text(encoding="utf-8")
-    return html.replace("<head>", "<head><script>window.LOCAL_APP=true</script>", 1).encode("utf-8")
+    with LOCK:
+        st = load_state()
+    fresh = not st.get("habits") and not st.get("meds") and not int(st.get("rev", 0))
+    data = "null" if fresh else json.dumps(st, ensure_ascii=False).replace("</", "<\\/")
+    boot = f"<script>window.LOCAL_APP=true;window.SERVER_STATE={data};</script>"
+    return html.replace("<head>", "<head>" + boot, 1).encode("utf-8")
 
 
 # ------------------------------------------------------------------ HTTP
@@ -241,8 +245,7 @@ class Handler(BaseHTTPRequestHandler):
             if n > 20_000_000:
                 return self._json({"ok": False, "err": "слишком большой файл"}, 413)
             new = json.loads(self.rfile.read(n).decode("utf-8"))
-            if not isinstance(new, dict) or not isinstance(new.get("habits"), list) \
-                    or not isinstance(new.get("done", {}), dict):
+            if not isinstance(new, dict) or not isinstance(new.get("habits"), list):
                 return self._json({"ok": False, "err": "неверный формат данных"}, 400)
         except (ValueError, UnicodeDecodeError):
             return self._json({"ok": False, "err": "неверный JSON"}, 400)
@@ -253,9 +256,6 @@ class Handler(BaseHTTPRequestHandler):
                 # данные успели измениться на другом устройстве
                 return self._json({"ok": False, "code": "conflict", "state": cur}, 409)
             new["rev"] = int(cur.get("rev", 0)) + 1
-            new.setdefault("done", {})
-            new.setdefault("settings", {})
-            new["version"] = 1
             new["saved"] = int(time.time())
             save_state(new)
         return self._json({"ok": True, "rev": new["rev"]})

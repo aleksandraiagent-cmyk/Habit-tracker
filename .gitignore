@@ -5,3 +5,5 @@ portable/
 *.spec
 habit_data/
 check_out/
+web/node_modules/
+web/.tmp/
