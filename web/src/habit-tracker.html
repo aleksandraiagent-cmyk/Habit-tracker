@@ -38,6 +38,7 @@
   }
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { scrollbar-width: none; }
+  #root { padding-top: env(safe-area-inset-top, 0px); padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
 </style>
 </head>
 <body class="bg-[#f5f5f7] dark:bg-black text-zinc-900 dark:text-zinc-100 antialiased transition-colors duration-300">
@@ -221,6 +222,54 @@ const sound = (() => {
   };
   return { unlock, beep };
 })();
+
+/* ---------- Приложение для Android (Capacitor): уведомления и кнопка «Назад» ---------- */
+const NATIVE = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() ? window.Capacitor.Plugins : null;
+const notify = (() => {
+  const LN = NATIVE && NATIVE.LocalNotifications;
+  let timer = null, ready = null, snoozeId = 900000;
+  const prepare = () => ready || (ready = (async () => {
+    let p = await LN.checkPermissions();
+    if (p.display !== 'granted') p = await LN.requestPermissions();
+    if (p.display !== 'granted') return false;
+    try { await LN.createChannel({ id: 'meds', name: 'Приём лекарств', description: 'Напоминания о таблетках', importance: 5, visibility: 1, vibration: true, lights: true }); } catch (e) {}
+    return true;
+  })().catch(() => { ready = null; return false; }));
+  const text = (m, t) => `${t} · ${m.name}${m.dose ? ' · ' + m.dose : ''}${m.note ? ' · ' + m.note : ''}`;
+  // Планируем уведомления на 14 дней вперёд; уже принятые приёмы пропускаем
+  async function plan(s) {
+    if (!LN || !(await prepare())) return;
+    const pending = (await LN.getPending()).notifications.filter(n => n.id < 900000);
+    if (pending.length) await LN.cancel({ notifications: pending.map(n => ({ id: n.id })) });
+    if (s.alarmsOn === false) return;
+    const now = new Date(), list = [];
+    for (let i = 0; i < 14 && list.length < 400; i++) {
+      const day = addDays(now, i), log = (s.medLog || {})[keyOf(day)] || {};
+      for (const m of s.meds || []) {
+        if (!m.alarm || !medToday(m, day)) continue;
+        for (const t of m.times) {
+          if (log[`${m.id}@${t}`]) continue;
+          const at = new Date(day); at.setHours(+t.slice(0, 2), +t.slice(3, 5), 0, 0);
+          if (at > now) list.push({ id: list.length + 1, title: 'Пора принять лекарство', body: text(m, t), channelId: 'meds', schedule: { at, allowWhileIdle: true } });
+        }
+      }
+    }
+    if (list.length) await LN.schedule({ notifications: list });
+  }
+  return {
+    available: !!LN,
+    plan: s => { if (!LN) return; clearTimeout(timer); timer = setTimeout(() => plan(s).catch(() => {}), 800); },
+    snooze: (m, t, at) => { if (LN) prepare().then(ok => ok && LN.schedule({ notifications: [{ id: snoozeId++, title: 'Пора принять лекарство', body: text(m, t), channelId: 'meds', schedule: { at, allowWhileIdle: true } }] })).catch(() => {}); },
+  };
+})();
+if (NATIVE && NATIVE.App) {
+  // «Назад»: закрыть открытое окно или меню, иначе свернуть приложение (данные не теряются)
+  NATIVE.App.addListener('backButton', () => {
+    if (document.querySelector('[role="dialog"], [role="alertdialog"], .menu-open')) {
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    } else NATIVE.App.minimizeApp();
+  });
+}
 
 /* ---------- Хранилище и демо-данные ---------- */
 const LS_KEY = 'habit-tracker-v1';
@@ -512,7 +561,7 @@ function HabitCard({ item, now, idx, onToggle, onArchive, onDelete }) {
       </div>
 
       {menu && <>
-        <div ref={menuRef} className="fade-in absolute right-3 top-[calc(100%-8px)] z-20 w-56 rounded-2xl bg-white dark:bg-zinc-800 p-1.5 shadow-xl ring-1 ring-black/5 dark:ring-white/10">
+        <div ref={menuRef} className="menu-open fade-in absolute right-3 top-[calc(100%-8px)] z-20 w-56 rounded-2xl bg-white dark:bg-zinc-800 p-1.5 shadow-xl ring-1 ring-black/5 dark:ring-white/10">
           <button onClick={() => { closeMenu(); onArchive(h.id); }} className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 transition">
             <Icon name="archive" size={17} className="text-zinc-500" />В архив
           </button>
@@ -1274,6 +1323,13 @@ function App() {
   // приложение для компьютера: изменения с другого устройства (iPhone) приходят сюда
   useEffect(() => { sync.onRemote = s => setState(normalize(s)); return () => { sync.onRemote = null; }; }, []);
   useEffect(() => { save(state); }, [state]);
+  useEffect(() => { notify.plan(state); }, [state.meds, state.medLog, state.alarmsOn]);
+  useEffect(() => {
+    if (!notify.available) return;
+    const vis = () => { if (!document.hidden) notify.plan(stRef.current); };
+    document.addEventListener('visibilitychange', vis);
+    return () => document.removeEventListener('visibilitychange', vis);
+  }, []);
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     const apply = () => document.documentElement.classList.toggle('dark', theme === 'dark' || (theme === 'auto' && mq.matches));
@@ -1330,6 +1386,8 @@ function App() {
   const snooze = key => {
     const d = new Date(Date.now() + 10 * 60000);
     snoozes.current[`${keyOf(new Date())}|${key}`] = keyOf(d) === keyOf(new Date()) ? hmOf(d) : '23:59';
+    const item = ringing.find(x => x.key === key);
+    if (item) notify.snooze(item.med, item.time, d);
     setRinging(r => r.filter(x => x.key !== key));
   };
   const saveMed = m => {

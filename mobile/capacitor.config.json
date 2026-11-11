@@ -1,0 +1,16 @@
+{
+  "appId": "app.habittracker.mobile",
+  "appName": "Привычки",
+  "webDir": "www",
+  "backgroundColor": "#f5f5f7",
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "css",
+      "initialViewportFitValueHint": "cover"
+    },
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_pill",
+      "iconColor": "#8b5cf6"
+    }
+  }
+}

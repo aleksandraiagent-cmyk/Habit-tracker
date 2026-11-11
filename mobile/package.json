@@ -1,0 +1,15 @@
+{
+  "name": "habit-tracker-android",
+  "private": true,
+  "description": "Трекер привычек для Android (Capacitor): страница из ../app/index.html",
+  "dependencies": {
+    "@capacitor/android": "8.6.0",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/cli": "8.6.0",
+    "@capacitor/core": "8.6.0",
+    "@capacitor/local-notifications": "8.3.1"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "4.0.0"
+  }
+}
