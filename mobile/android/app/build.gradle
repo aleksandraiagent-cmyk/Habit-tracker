@@ -25,6 +25,7 @@ android {
         habits {
             if (ks.exists() && ksPass) {
                 storeFile ks
+                storeType "pkcs12"
                 storePassword ksPass
                 keyAlias "habits"
                 keyPassword ksPass
