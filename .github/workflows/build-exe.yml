@@ -36,10 +36,10 @@ jobs:
           $p = Start-Process -FilePath dist\HabitTracker.exe -ArgumentList "--no-browser","--port","8799" -PassThru
           Start-Sleep -Seconds 8
           $page = Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8799/
-          if ($page.Content -notmatch "window.LOCAL_APP=true") { Stop-Process -Id $p.Id -Force; throw "страница трекера не отдаётся" }
+          if ($page.Content -notmatch "window.LOCAL_APP=true") { Stop-Process -Name HabitTracker -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2; throw "страница трекера не отдаётся" }
           python tools/check_app.py http://127.0.0.1:8799/ check_out
           $code = $LASTEXITCODE
-          Stop-Process -Id $p.Id -Force
+          Stop-Process -Name HabitTracker -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2
           if ($code -ne 0) { throw "проверка интерфейса не прошла" }
           if (-not (Test-Path "$env:HABIT_DATA_DIR\habits.json")) { throw "данные не сохранились в habits.json" }
           Write-Output "OK: exe запускается, данные сохраняются"
@@ -69,7 +69,7 @@ jobs:
           $p = Start-Process -FilePath $exe -ArgumentList "--no-browser","--port","8798" -PassThru
           Start-Sleep -Seconds 8
           $st = Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8798/api/status
-          Stop-Process -Id $p.Id -Force
+          Stop-Process -Name HabitTracker -Force -ErrorAction SilentlyContinue; Start-Sleep -Seconds 2
           Write-Output $st.Content
           if ($st.Content -notmatch 'Local\\\\HabitTracker\\\\habits\.json') { throw "установленная версия должна хранить данные в %LOCALAPPDATA%\HabitTracker" }
           Start-Process -Wait -FilePath "$env:LOCALAPPDATA\Programs\HabitTracker\unins000.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES"

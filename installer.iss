@@ -44,7 +44,7 @@ Name: "{group}\{#AppName} для iPhone (Wi-Fi)"; Filename: "{app}\{#AppExe}"; P
 Name: "{group}\Папка с данными"; Filename: "{localappdata}\HabitTracker"
 Name: "{group}\Удалить {#AppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; IconFilename: "{app}\habit.ico"; Tasks: desktopicon
-Name: "{userstartup}\{#AppName}"; Filename: "{app}\{#AppExe}"; Parameters: "--lan --no-browser"; IconFilename: "{app}\habit.ico"; WindowState: minimized; Tasks: autostart
+Name: "{userstartup}\{#AppName}"; Filename: "{app}\{#AppExe}"; Parameters: "--lan --no-browser"; IconFilename: "{app}\habit.ico"; Flags: runminimized; Tasks: autostart
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "Запустить {#AppName}"; Flags: nowait postinstall skipifsilent
