@@ -37,7 +37,7 @@ writeFileSync(join(tmp, 'in.css'), '@tailwind base;\n@tailwind components;\n@tai
 writeFileSync(join(tmp, 'tailwind.config.cjs'), `module.exports = {
   content: [${JSON.stringify(src)}],
   darkMode: 'class',
-  theme: { extend: { fontFamily: { sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', '"SF Pro Text"', '"Segoe UI"', 'system-ui', 'sans-serif'] } } },
+  theme: { extend: { fontFamily: { sans: ['-apple-system', 'Roboto', 'BlinkMacSystemFont', '"SF Pro Text"', '"Segoe UI"', 'system-ui', 'sans-serif'] } } },
 };`);
 const tw = join(here, 'node_modules', 'tailwindcss', 'lib', 'cli.js');
 execFileSync(process.execPath, [tw, '-c', join(tmp, 'tailwind.config.cjs'), '-i', join(tmp, 'in.css'), '-o', join(tmp, 'out.css'), '--minify'], { stdio: 'inherit', cwd: here });
@@ -59,7 +59,6 @@ const page = `<!DOCTYPE html>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="favicon.ico">
 <title>${title}</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>${outCss}</style>
 </head>
 <body class="${bodyClass}">

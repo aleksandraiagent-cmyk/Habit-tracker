@@ -128,6 +128,17 @@ with sync_playwright() as p:
         len(st["habits"]) == 5 and st["meds"][0]["name"] == "Витамин D" and st["medalSeen"] == 1) or (_ for _ in ()).throw(
         AssertionError(f"на сервере: {len(st['habits'])} привычек, meds={st.get('meds')}, medalSeen={st.get('medalSeen')}")))
 
+    def privacy():
+        pg.click("button:has-text('Политика конфиденциальности')")
+        pg.wait_for_selector("[role=dialog][aria-label='Политика конфиденциальности']", timeout=2000)
+        assert pg.locator("text=Всё это хранится только на вашем устройстве").count() == 1
+        pg.screenshot(path=str(OUT / "privacy.png"))
+        pg.keyboard.press("Escape")
+        pg.wait_for_timeout(300)
+        assert pg.locator("[role=dialog]").count() == 0, "окно политики не закрылось"
+        assert pg.locator("text=Не заменяет консультацию врача").count() >= 1, "нет медицинской оговорки на вкладке «Таблетки»"
+    step("политика конфиденциальности и медицинская оговорка", privacy)
+
     for tab, name in (("Медали", "medals"), ("Статистика", "stats"), ("Архив", "archive"), ("Сегодня", "today")):
         step(f"вкладка «{tab}»", lambda tab=tab, name=name: (
             pg.click(f'role=tab[name="{tab}"]'), pg.wait_for_timeout(300),

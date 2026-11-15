@@ -4,13 +4,11 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Трекер привычек</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdn.tailwindcss.com"></script>
 <script>
   tailwind.config = {
     darkMode: 'class',
-    theme: { extend: { fontFamily: { sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', '"SF Pro Text"', 'system-ui', 'sans-serif'] } } }
+    theme: { extend: { fontFamily: { sans: ['-apple-system', 'Roboto', 'BlinkMacSystemFont', '"SF Pro Text"', 'system-ui', 'sans-serif'] } } }
   };
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
@@ -863,6 +861,7 @@ function PillsView({ meds, medLog, now, alarmsOn, onToggleAlarms, onTake, onAdd,
       <div className="mx-auto w-14 h-14 rounded-2xl grid place-items-center bg-violet-50 text-violet-500 dark:bg-violet-400/10 dark:text-violet-300"><Icon name="pill" size={26} /></div>
       <p className="mt-4 font-semibold">Расписание приёма пока пустое</p>
       <p className="mt-1 text-sm text-zinc-500">Добавьте лекарство, время приёма — и будильник напомнит о нём.</p>
+      <p className="mt-4 text-xs text-zinc-400 leading-relaxed">Приложение только напоминает о приёме и не даёт медицинских рекомендаций. Не заменяет консультацию врача — дозировку и схему приёма определяет специалист.</p>
       <button onClick={onAdd} className="mt-5 inline-flex items-center gap-2 rounded-full bg-violet-500 hover:bg-violet-600 text-white px-5 py-2.5 text-sm font-semibold transition active:scale-95"><Icon name="plus" size={18} />Добавить лекарство</button>
     </div>
   );
@@ -907,6 +906,8 @@ function PillsView({ meds, medLog, now, alarmsOn, onToggleAlarms, onTake, onAdd,
         </div>
         <p className="mt-3 text-xs text-zinc-400 leading-relaxed">Будильник звонит, пока трекер открыт на экране. Если приложение закрыто или телефон заблокирован, сигнала не будет.</p>
       </section>
+
+      <p className="px-1 text-xs text-zinc-400 leading-relaxed">Приложение только напоминает о приёме и не даёт медицинских рекомендаций. Не заменяет консультацию врача — дозировку и схему приёма определяет специалист.</p>
 
       <section>
         <div className="flex items-center justify-between px-1 mb-2.5">
@@ -1262,8 +1263,46 @@ function AddSheet({ onClose, onAdd }) {
 }
 
 /* ---------- Приложение ---------- */
+function PrivacySheet({ onClose }) {
+  useEffect(() => {
+    const k = e => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', k);
+    return () => window.removeEventListener('keydown', k);
+  }, []);
+  const H = ({ children }) => <h3 className="mt-5 font-semibold text-zinc-900 dark:text-zinc-100">{children}</h3>;
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
+      <div className="fade-in absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div role="dialog" aria-modal="true" aria-label="Политика конфиденциальности"
+        className="sheet-in relative w-full sm:max-w-md max-h-[88vh] overflow-y-auto rounded-t-[28px] sm:rounded-[28px] bg-white dark:bg-zinc-900 p-6 shadow-2xl"
+        style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}>
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="text-xl font-bold tracking-tight">Политика конфиденциальности</h2>
+          <button onClick={onClose} aria-label="Закрыть" className="w-9 h-9 shrink-0 rounded-full grid place-items-center bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition"><Icon name="x" size={18} /></button>
+        </div>
+        <div className="mt-2 text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
+          <p>Действует с 15 ноября 2026 года. Относится к приложению «Привычки».</p>
+          <H>Какие данные хранятся</H>
+          <p>Ваши привычки, отметки о выполнении, список лекарств, время приёма и настройки. Всё это хранится только на вашем устройстве.</p>
+          <H>Что мы не делаем</H>
+          <p>Мы не собираем, не отправляем на серверы и не передаём третьим лицам ваши данные. В приложении нет регистрации, рекламы и аналитики.</p>
+          <H>Разрешения</H>
+          <p>Уведомления и будильники нужны только для напоминаний о привычках и приёме лекарств. Запуск после перезагрузки нужен, чтобы восстановить запланированные напоминания.</p>
+          <H>Удаление данных</H>
+          <p>Удалить данные можно в самом приложении или удалив приложение с устройства. Восстановить их после этого нельзя: копий у нас нет.</p>
+          <H>Медицинская оговорка</H>
+          <p>Приложение не является медицинским изделием и не даёт медицинских рекомендаций.</p>
+          <H>Контакты</H>
+          <p>Вопросы о конфиденциальности: <a href="mailto:HabitTrackerContacts@gmail.com" className="text-indigo-500 underline underline-offset-2">HabitTrackerContacts@gmail.com</a>.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function App() {
   const [state, setState] = useState(load);
+  const [showPrivacy, setShowPrivacy] = useState(false);
   const { habits, theme } = state;
   const [tab, setTab] = useState('today');
   const [showAdd, setShowAdd] = useState(false);
@@ -1452,6 +1491,10 @@ function App() {
           {tab === 'stats' && <StatsView habits={habits} now={now} />}
           {tab === 'archive' && <ArchiveView habits={habits} onRestore={restore} onDelete={remove} />}
         </main>
+
+        <footer className="mt-10 text-center">
+          <button onClick={() => setShowPrivacy(true)} className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 underline underline-offset-2">Политика конфиденциальности</button>
+        </footer>
       </div>
 
       <button onClick={openNew} aria-label={tab === 'pills' ? 'Новое лекарство' : 'Новая привычка'}
@@ -1460,6 +1503,7 @@ function App() {
         <Icon name="plus" size={26} stroke={2.5} />
       </button>
 
+      {showPrivacy && <PrivacySheet onClose={() => setShowPrivacy(false)} />}
       {showAdd && <AddSheet onClose={() => setShowAdd(false)} onAdd={add} />}
       {newMedal && <NewMedalModal n={newMedal} onClose={() => setNewMedal(null)} />}
       {medSheet && <MedSheet initial={medSheet === 'new' ? null : medSheet} onClose={() => setMedSheet(null)} onSave={saveMed} onDelete={deleteMed} />}
