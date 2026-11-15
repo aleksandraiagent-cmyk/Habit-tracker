@@ -5,7 +5,7 @@ on:
   push:
     branches: [main, claude/habit-tracker-app-zpj1he]
     tags: ["v*"]
-    paths: ["web/**", "mobile/**", ".github/workflows/build-android.yml"]
+    paths: ["web/**", "mobile/**", "store/**", ".github/workflows/build-android.yml"]
 
 permissions:
   contents: write
@@ -50,11 +50,22 @@ jobs:
           ./gradlew assembleRelease --no-daemon --stacktrace
           mkdir -p ../../out
           cp app/build/outputs/apk/release/app-release.apk ../../out/Privychki.apk
+          # AAB для Google Play — только с постоянным ключом (ключ загрузки Play App Signing)
+          if [ -f release.keystore ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ]; then
+            ./gradlew bundleRelease --no-daemon
+            mkdir -p ../../play
+            cp app/build/outputs/bundle/release/app-release.aab ../../play/Privychki.aab
+          else
+            echo "::warning::AAB для Google Play не собран: нужны секреты ANDROID_KEYSTORE_BASE64 и ANDROID_KEYSTORE_PASSWORD"
+          fi
           rm -f release.keystore
       - name: Проверка подписи и версии
         run: |
           BT=$(ls -d $ANDROID_HOME/build-tools/* | sort -V | tail -1)
           $BT/apksigner verify --print-certs out/Privychki.apk | head -3
+          if $BT/apksigner verify --print-certs out/Privychki.apk | grep -q "CN=Android Debug"; then
+            echo "::warning::APK подписан временным отладочным ключом"
+          fi
           $BT/aapt2 dump badging out/Privychki.apk | grep -E "package:|application-label|uses-permission" | head -12
       - name: Включить KVM для эмулятора
         run: |
@@ -95,8 +106,17 @@ jobs:
           name: Privychki-android
           path: out/Privychki.apk
           retention-days: 90
+      - name: AAB для Google Play
+        if: hashFiles('play/Privychki.aab') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: Privychki-google-play
+          path: play/Privychki.aab
+          retention-days: 90
       - name: Выпуск (Releases) при теге v*
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          files: out/Privychki.apk
+          files: |
+            out/Privychki.apk
+            play/Privychki.aab
