@@ -53,9 +53,7 @@
 
 **Категория:** Здоровье и фитнес (Health & Fitness). **Контакты:** HabitTrackerContacts@gmail.com.
 
-**Политика конфиденциальности** (ссылка обязательна):
-https://github.com/aleksandraiagent-cmyk/Habit-tracker/blob/main/PRIVACY.md
-— эта ссылка заработает после того, как изменения попадут в ветку `main`. До этого:
+**Политика конфиденциальности** (ссылка обязательна, открывается уже сейчас):
 https://github.com/aleksandraiagent-cmyk/Habit-tracker/blob/claude/habit-tracker-app-zpj1he/PRIVACY.md
 
 ## 3. Содержание приложения (App content)
