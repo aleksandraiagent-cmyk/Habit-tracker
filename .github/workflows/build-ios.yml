@@ -1,0 +1,100 @@
+name: Сборка iOS
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, claude/habit-tracker-app-zpj1he]
+    tags: ["v*"]
+    paths: ["web/**", "mobile/**", ".github/workflows/build-ios.yml"]
+
+jobs:
+  ios:
+    runs-on: macos-latest
+    env:
+      VERSION_CODE: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Сборка страницы из артефакта
+        working-directory: web
+        run: |
+          npm ci --no-audit --no-fund
+          node build.mjs
+      - name: Подготовка проекта Capacitor
+        working-directory: mobile
+        run: |
+          npm ci --no-audit --no-fund
+          mkdir -p www && cp ../app/index.html www/
+          npx cap sync ios
+      - name: Сборка для симулятора iPhone
+        working-directory: mobile/ios/App
+        run: |
+          xcodebuild -version
+          xcodebuild -project App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO \
+            CURRENT_PROJECT_VERSION=$VERSION_CODE MARKETING_VERSION=1.0.$VERSION_CODE build | tail -30
+          test -d build/Build/Products/Debug-iphonesimulator/App.app
+      - name: Запуск на симуляторе iPhone
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c "
+          import json,sys
+          d=json.load(sys.stdin)['devices']
+          c=[x for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone')]
+          print(c[-1]['udid'])")
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl install "$UDID" mobile/ios/App/build/Build/Products/Debug-iphonesimulator/App.app
+          xcrun simctl privacy "$UDID" grant notifications app.habittracker.mobile || true
+          xcrun simctl launch "$UDID" app.habittracker.mobile
+          sleep 20
+          mkdir -p sim
+          xcrun simctl io "$UDID" screenshot sim/iphone.png
+          xcrun simctl spawn "$UDID" launchctl list | grep -q app.habittracker.mobile || { echo "приложение не работает"; exit 1; }
+          echo "OK: приложение запущено на симуляторе iPhone"
+      - name: Скриншот с симулятора
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-check
+          path: sim/
+          retention-days: 14
+
+      # --- Подпись и отправка в TestFlight: нужны аккаунт Apple Developer и секреты репозитория ---
+      - name: Подпись и отправка в TestFlight
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+        working-directory: mobile/ios/App
+        run: |
+          if [ -z "$APPLE_TEAM_ID" ] || [ -z "$ASC_KEY_ID" ] || [ -z "$ASC_ISSUER_ID" ] || [ -z "$ASC_KEY_P8" ]; then
+            echo "::warning::Ключи Apple не заданы — сборка для iPhone не подписана и в TestFlight не отправлена (см. store/IOS.md)"
+            exit 0
+          fi
+          mkdir -p ~/.appstoreconnect/private_keys
+          KEY=~/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8
+          printf '%s\n' "$ASC_KEY_P8" > "$KEY"
+          AUTH="-allowProvisioningUpdates -authenticationKeyPath $KEY -authenticationKeyID $ASC_KEY_ID -authenticationKeyIssuerID $ASC_ISSUER_ID"
+          xcodebuild -project App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath build/App.xcarchive \
+            DEVELOPMENT_TEAM=$APPLE_TEAM_ID CODE_SIGN_STYLE=Automatic \
+            CURRENT_PROJECT_VERSION=$VERSION_CODE MARKETING_VERSION=1.0.$VERSION_CODE \
+            $AUTH archive | tail -20
+          cat > build/export.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>teamID</key><string>$APPLE_TEAM_ID</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>destination</key><string>upload</string>
+          </dict></plist>
+          EOF
+          xcodebuild -exportArchive -archivePath build/App.xcarchive -exportOptionsPlist build/export.plist \
+            -exportPath build/export $AUTH | tail -20
+          rm -f "$KEY"
+          echo "OK: сборка отправлена в App Store Connect → TestFlight"

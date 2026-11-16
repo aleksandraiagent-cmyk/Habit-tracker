@@ -246,15 +246,18 @@ const notify = (() => {
     if (pending.length) await LN.cancel({ notifications: pending.map(n => ({ id: n.id })) });
     if (s.alarmsOn === false) return;
     const exact = await exactOk();
+    // iOS хранит не больше 64 запланированных уведомлений — берём ближайшие, остальные добавятся при следующем открытии
+    const ios = window.Capacitor.getPlatform && window.Capacitor.getPlatform() === 'ios';
+    const max = ios ? 60 : 400;
     const now = new Date(), list = [];
-    for (let i = 0; i < 14 && list.length < 400; i++) {
+    for (let i = 0; i < 14 && list.length < max; i++) {
       const day = addDays(now, i), log = (s.medLog || {})[keyOf(day)] || {};
       for (const m of s.meds || []) {
         if (!m.alarm || !medToday(m, day)) continue;
         for (const t of m.times) {
           if (log[`${m.id}@${t}`]) continue;
           const at = new Date(day); at.setHours(+t.slice(0, 2), +t.slice(3, 5), 0, 0);
-          if (at > now) list.push({ id: list.length + 1, title: 'Пора принять лекарство', body: text(m, t), channelId: 'meds', isExactNotification: exact, schedule: { at, allowWhileIdle: true } });
+          if (at > now && list.length < max) list.push({ id: list.length + 1, title: 'Пора принять лекарство', body: text(m, t), channelId: 'meds', isExactNotification: exact, schedule: { at, allowWhileIdle: true } });
         }
       }
     }
