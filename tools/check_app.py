@@ -56,7 +56,7 @@ def ringing(pg):
 
 with sync_playwright() as p:
     br = launch(p)
-    pg = br.new_context(viewport={"width": 1100, "height": 900}).new_page()
+    pg = br.new_context(locale="ru-RU", viewport={"width": 1100, "height": 900}).new_page()
     watch(pg, "компьютер")
     pg.clock.install(time=AT(7, 58))
     pg.goto(URL)
@@ -145,7 +145,7 @@ with sync_playwright() as p:
             pg.screenshot(path=str(OUT / f"{name}.png"), full_page=True)))
 
     # второе устройство (iPhone)
-    ph = br.new_context(viewport={"width": 390, "height": 844}, device_scale_factor=2, has_touch=True).new_page()
+    ph = br.new_context(locale="ru-RU", viewport={"width": 390, "height": 844}, device_scale_factor=2, has_touch=True).new_page()
     watch(ph, "телефон")
     ph.goto(URL)
     ph.wait_for_selector("text=Прогулка")

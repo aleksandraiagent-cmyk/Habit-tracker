@@ -5,7 +5,7 @@ on:
   push:
     branches: [main, claude/habit-tracker-app-zpj1he]
     tags: ["v*"]
-    paths: ["web/**", "mobile/**", "store/**", ".github/workflows/build-android.yml"]
+    paths: ["web/**", "mobile/**", "store/**", "tools/check_features.py", ".github/workflows/build-android.yml"]
 
 permissions:
   contents: write
@@ -27,6 +27,18 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           node build.mjs
+      - name: Проверка функций в браузере (языки, защита, будильники, уведомления)
+        run: |
+          pip install playwright
+          mkdir -p mobile/www && cp app/index.html mobile/www/
+          python tools/check_features.py mobile/www check_out
+      - name: Скриншоты проверки
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: feature-check
+          path: check_out/
+          retention-days: 14
       - name: Подготовка проекта Capacitor
         working-directory: mobile
         run: |
@@ -92,6 +104,8 @@ jobs:
             adb shell pidof app.habittracker.mobile > emu/pid.txt || true
             grep -E "FATAL EXCEPTION|AndroidRuntime: Process: app.habittracker" emu/logcat.txt && exit 1 || true
             test -s emu/pid.txt
+            grep -F "[privychki] native" emu/logcat.txt | tail -3 || true
+            grep -qF "[privychki] native ok" emu/logcat.txt || { echo "Функции телефона (уведомления) не подключены"; exit 1; }
             grep -E "Capacitor/Console.*(Error|error)" emu/logcat.txt | head -20 || true
             echo "OK: приложение запущено и работает"
       - name: Скриншот с эмулятора
@@ -120,3 +134,8 @@ jobs:
           files: |
             out/Privychki.apk
             play/Privychki.aab
+      - name: Итог проверки на эмуляторе
+        if: steps.emulator.outcome != 'success'
+        run: |
+          echo "Проверка на эмуляторе Android не прошла — см. шаг «Запуск на эмуляторе Android»"
+          exit 1

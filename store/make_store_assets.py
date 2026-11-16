@@ -58,11 +58,14 @@ def sample_state():
 
 
 # Подставляем «Android»: уведомления разрешены, как в установленном приложении
-NATIVE_MOCK = """window.Capacitor = { isNativePlatform: () => true, Plugins: {
+NATIVE_MOCK = """window.androidBridge = {};
+(() => { const impl = {
   LocalNotifications: { checkPermissions: async () => ({display: 'granted'}), requestPermissions: async () => ({display: 'granted'}),
-    createChannel: async () => {}, getPending: async () => ({notifications: []}), cancel: async () => {}, schedule: async () => ({}),
+    createChannel: async () => ({}), getPending: async () => ({notifications: []}), cancel: async () => ({}), schedule: async () => ({}),
     checkExactNotificationSetting: async () => ({exact_alarm: 'granted'}), changeExactNotificationSetting: async () => ({exact_alarm: 'granted'}) },
-  App: { addListener: () => {}, minimizeApp: () => {} } } };"""
+  App: { minimizeApp: async () => ({}) }, NativeBiometric: { isAvailable: async () => ({isAvailable: false}) } };
+  window.Capacitor = { PluginHeaders: Object.keys(impl).map(n => ({name: n, methods: [...Object.keys(impl[n]).map(m => ({name: m, rtype: 'promise'})), {name: 'addListener'}]})),
+    nativePromise: (p, m, o) => Promise.resolve().then(() => impl[p][m](o || {})), nativeCallback: () => Promise.resolve('cb') }; })();"""
 
 
 class Quiet(http.server.SimpleHTTPRequestHandler):
@@ -94,7 +97,7 @@ def main():
                 break
             except Exception:  # noqa: BLE001
                 continue
-        ctx = br.new_context(viewport={"width": 360, "height": 640}, device_scale_factor=3, color_scheme="light")
+        ctx = br.new_context(locale="ru-RU", viewport={"width": 360, "height": 640}, device_scale_factor=3, color_scheme="light")
         ctx.add_init_script(NATIVE_MOCK + f"\ntry {{ localStorage.setItem('habit-tracker-v1', {json.dumps(state)}); }} catch (e) {{}}")
         pg = ctx.new_page()
         pg.clock.install(time=dt.datetime.combine(dt.date.today(), dt.time(10, 30)))
@@ -108,7 +111,7 @@ def main():
             pg.screenshot(path=str(OUT / f"screenshot-{name}.png"))
             print(f"готово: screenshot-{name}.png")
         pg.click('role=tab[name="Сегодня"]')
-        dark = br.new_context(viewport={"width": 360, "height": 640}, device_scale_factor=3, color_scheme="dark")
+        dark = br.new_context(locale="ru-RU", viewport={"width": 360, "height": 640}, device_scale_factor=3, color_scheme="dark")
         dark.add_init_script(NATIVE_MOCK + f"\ntry {{ localStorage.setItem('habit-tracker-v1', {json.dumps(state.replace('\"theme\": \"light\"', '\"theme\": \"dark\"'))}); }} catch (e) {{}}")
         dp = dark.new_page()
         dp.clock.install(time=dt.datetime.combine(dt.date.today(), dt.time(21, 15)))

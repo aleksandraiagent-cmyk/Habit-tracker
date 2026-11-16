@@ -43,7 +43,550 @@
 <div id="root"></div>
 
 <script type="text/babel" data-presets="react">
+/** @jsx JSXT */
+/** @jsxFrag React.Fragment */
 const { useState, useEffect, useRef } = React;
+
+/* ---------- Языки: русский, английский, иврит ---------- */
+// Тексты в коде — на русском. Для других языков JSXT (фабрика JSX) подставляет перевод из словаря,
+// а L('текст {0}', значение) переводит строки, собранные в коде.
+let LANG = 'ru';
+const LANGS = {
+  ru: { name: 'Русский', locale: 'ru-RU', dir: 'ltr' },
+  en: { name: 'English', locale: 'en-US', dir: 'ltr' },
+  he: { name: 'עברית', locale: 'he-IL', dir: 'rtl' },
+};
+const detectLang = () => {
+  const n = ((typeof navigator !== 'undefined' && navigator.language) || 'ru').toLowerCase();
+  return /^(he|iw)/.test(n) ? 'he' : /^(ru|uk|be|kk)/.test(n) ? 'ru' : 'en';
+};
+const LOC = () => LANGS[LANG].locale;
+const PLURALS = {
+  en: { 'день': ['day', 'days'], 'неделя': ['week', 'weeks'], 'раз': ['time', 'times'], 'балл': ['point', 'points'], 'отметка': ['check-in', 'check-ins'] },
+  he: { 'день': ['יום', 'ימים'], 'неделя': ['שבוע', 'שבועות'], 'раз': ['פעם', 'פעמים'], 'балл': ['נקודה', 'נקודות'], 'отметка': ['סימון', 'סימונים'] },
+};
+const DICT = { en: {
+ "Здоровье": "Health",
+ "Продуктивность": "Productivity",
+ "Спорт": "Sport",
+ "Ментальное здоровье": "Mental health",
+ "Ментальное": "Mind",
+ "Утро": "Morning",
+ "День": "Day",
+ "Вечер": "Evening",
+ "Любое время": "Any time",
+ "Любое": "Any",
+ "Вс": "Sun",
+ "Пн": "Mon",
+ "Вт": "Tue",
+ "Ср": "Wed",
+ "Чт": "Thu",
+ "Пт": "Fri",
+ "Сб": "Sat",
+ "Ежедневно": "Daily",
+ "{0} {1} в неделю": "{0} {1} a week",
+ "Бронза": "Bronze",
+ "Серебро": "Silver",
+ "Золото": "Gold",
+ "1–10 дней": "1–10 days",
+ "20–100 дней": "20–100 days",
+ "200–1000 дней": "200–1000 days",
+ "через {0} мин": "in {0} min",
+ "через {0} ч": "in {0} h",
+ "через {0} ч {1} мин": "in {0} h {1} min",
+ "Напоминания": "Reminders",
+ "Напоминания о привычках и лекарствах": "Habit and medication reminders",
+ "Пора принять лекарство": "Time to take your medication",
+ "Напоминание о привычке": "Habit reminder",
+ "Выпить стакан воды": "Drink a glass of water",
+ "Утренняя зарядка": "Morning exercise",
+ "Чтение 20 минут": "Read for 20 minutes",
+ "Медитация 10 минут": "Meditate for 10 minutes",
+ "На сегодня ничего не запланировано": "Nothing planned for today",
+ "Все привычки выполнены — вы молодец!": "All habits done — well done!",
+ "Начнём день с маленького шага": "Let's start the day with a small step",
+ "Отличный темп — осталось {0}": "Great pace — {0} to go",
+ "Прогресс за сегодня": "Today's progress",
+ "Выполнено": "Done",
+ "из": "of",
+ "Снять отметку: {0}": "Unmark: {0}",
+ "Отметить выполнение: {0}": "Mark as done: {0}",
+ "Цель недели выполнена ✓": "Weekly goal reached ✓",
+ "Последние 7 дней": "Last 7 days",
+ "выполнено": "done",
+ "не выполнено": "not done",
+ "не по плану": "not scheduled",
+ "Серия: {0} {1}": "Streak: {0} {1}",
+ "нед": "wk",
+ "дн": "d",
+ "Действия": "Actions",
+ "В архив": "Archive",
+ "Удалить": "Delete",
+ "Точно удалить?": "Really delete?",
+ "Изменить": "Edit",
+ "Пока нет привычек на сегодня": "No habits for today yet",
+ "Добавьте первую — начать можно с чего-то совсем простого.": "Add your first one — start with something really simple.",
+ "Новая привычка": "New habit",
+ "Сегодня не по плану:": "Not scheduled today:",
+ "Баллы · 1 день = 1 балл": "Points · 1 day = 1 point",
+ "Средний уровень": "Average level",
+ "Лучшая серия · {0}": "Best streak · {0}",
+ "Активность": "Activity",
+ "последние": "last",
+ "недель": "weeks",
+ "нет привычек": "no habits",
+ "Меньше": "Less",
+ "Больше": "More",
+ "По привычкам · 30 дней": "By habit · 30 days",
+ "Нет активных привычек.": "No active habits.",
+ "за 30 дн": "in 30 d",
+ "Баллы за активность": "Activity points",
+ "1 день с выполненной привычкой = 1 балл": "1 day with a completed habit = 1 point",
+ "медалей": "medals",
+ "Следующая: «Вы продержались": "Next: “You kept going for",
+ "»": "”",
+ "ещё": "to go:",
+ "Все медали собраны — это легендарно! 🏆": "All medals collected — legendary! 🏆",
+ "Получена: вы продержались {0} {1}": "Earned: you kept going for {0} {1}",
+ "Откроется через {0} {1}": "Unlocks in {0} {1}",
+ "Вы продержались": "You kept going",
+ "Напоминания могут опаздывать": "Reminders may be late",
+ "Чтобы уведомление приходило ровно в назначенное время, разрешите приложению «Будильники и напоминания».": "To get notifications exactly on time, allow “Alarms & reminders” for the app.",
+ "Разрешить точные напоминания": "Allow exact reminders",
+ "Расписание приёма пока пустое": "Your medication schedule is empty",
+ "Добавьте лекарство, время приёма — и будильник напомнит о нём.": "Add a medication and a time — the alarm will remind you.",
+ "Приложение только напоминает о приёме и не даёт медицинских рекомендаций. Не заменяет консультацию врача — дозировку и схему приёма определяет специалист.": "The app only reminds you to take medication and gives no medical advice. It does not replace a doctor — dosage and schedule are set by a specialist.",
+ "Добавить лекарство": "Add medication",
+ "Приём таблеток сегодня": "Medications today",
+ "Принято": "Taken",
+ "Следующий приём в": "Next dose at",
+ "Все лекарства на сегодня приняты": "All medications for today are taken",
+ "На сегодня больше приёмов нет": "No more doses today",
+ "Будильник": "Alarm",
+ "Звонит в назначенное время": "Rings at the set time",
+ "Выключен для привычек и лекарств": "Off for habits and medications",
+ "Проверить звук": "Test sound",
+ "Звук работает ✓": "Sound works ✓",
+ "Браузер не дал включить звук — проверьте беззвучный режим": "The browser blocked the sound — check silent mode",
+ "Напоминания приходят уведомлением, даже если приложение закрыто и телефон заблокирован.": "Reminders arrive as notifications even when the app is closed and the phone is locked.",
+ "Будильник звонит, пока трекер открыт на экране. Если приложение закрыто или телефон заблокирован, сигнала не будет.": "The alarm rings while the tracker is open on screen. If the app is closed or the phone is locked, there is no sound.",
+ "Расписание на сегодня": "Today's schedule",
+ "Сегодня приёмов нет.": "No doses today.",
+ "· принято в": "· taken at",
+ "· пропущено": "· missed",
+ "Отменить приём": "Undo dose",
+ "Отметить приём": "Mark dose as taken",
+ "Принять": "Take",
+ "Мои лекарства": "My medications",
+ "Добавить": "Add",
+ "каждый день": "every day",
+ "1 таблетка": "1 tablet",
+ "Введите название лекарства": "Enter the medication name",
+ "Добавьте хотя бы одно время приёма": "Add at least one time",
+ "Выберите дни недели": "Choose days of the week",
+ "Лекарство": "Medication",
+ "Новое лекарство": "New medication",
+ "Закрыть": "Close",
+ "Название": "Name",
+ "Например, «Витамин D»": "E.g. “Vitamin D”",
+ "Дозировка": "Dosage",
+ "Заметка": "Note",
+ "после еды": "after meals",
+ "Время приёма": "Time",
+ "Время {0}": "Time {0}",
+ "Убрать время": "Remove time",
+ "Ещё время": "Add time",
+ "Дни": "Days",
+ "Каждый день": "Every day",
+ "По дням": "Selected days",
+ "Будильник для этого лекарства": "Alarm for this medication",
+ "Цвет": "Color",
+ "Цвет {0}": "Color {0}",
+ "Сохранить": "Save",
+ "Добавить в расписание": "Add to schedule",
+ "Удалить лекарство": "Delete medication",
+ "Пора принять": "Time to take",
+ "Напоминание": "Reminder",
+ "Через 10 мин": "In 10 min",
+ "Принял(а)": "Taken",
+ "Выключить": "Dismiss",
+ "Новая медаль!": "New medal!",
+ "Отлично!": "Great!",
+ "Архив пуст": "Archive is empty",
+ "Сюда попадают привычки, которые вы поставили на паузу. История при этом сохраняется.": "Habits you paused end up here. Their history is kept.",
+ "Вернуть": "Restore",
+ "Вернуть из архива": "Restore from archive",
+ "Удалить?": "Delete?",
+ "Введите название привычки": "Enter the habit name",
+ "Выберите хотя бы один день недели": "Choose at least one day",
+ "Например, «Пройти 8 000 шагов»": "E.g. “Walk 8,000 steps”",
+ "Категория": "Category",
+ "Частота": "Frequency",
+ "X раз/нед": "X times/wk",
+ "Раз в неделю": "Times a week",
+ "Время суток": "Time of day",
+ "Добавить привычку": "Add habit",
+ "Привычка": "Habit",
+ "Время": "Time",
+ "Напомнить в назначенное время": "Remind at a set time",
+ "Политика конфиденциальности": "Privacy policy",
+ "Действует с 15 ноября 2026 года. Относится к приложению «Привычки».": "Effective 15 November 2026. Applies to the “Habits” app.",
+ "Какие данные хранятся": "What data is stored",
+ "Ваши привычки, отметки о выполнении, список лекарств, время приёма и настройки. Всё это хранится только на вашем устройстве.": "Your habits, check-ins, medication list, dose times and settings. All of it is stored only on your device.",
+ "Что мы не делаем": "What we do not do",
+ "Мы не собираем, не отправляем на серверы и не передаём третьим лицам ваши данные. В приложении нет регистрации, рекламы и аналитики.": "We do not collect your data, send it to servers or share it with third parties. The app has no sign-up, ads or analytics.",
+ "Разрешения": "Permissions",
+ "Уведомления и будильники нужны только для напоминаний о привычках и приёме лекарств. Запуск после перезагрузки нужен, чтобы восстановить запланированные напоминания. Биометрия (Face ID, отпечаток) используется только для входа в приложение и обрабатывается самим устройством.": "Notifications and alarms are used only for habit and medication reminders. Start after reboot is needed to restore scheduled reminders. Biometrics (Face ID, fingerprint) are used only to unlock the app and are processed by the device itself.",
+ "Удаление данных": "Deleting data",
+ "Удалить данные можно в самом приложении или удалив приложение с устройства. Восстановить их после этого нельзя: копий у нас нет.": "You can delete data in the app or by uninstalling it. It cannot be restored afterwards: we keep no copies.",
+ "Медицинская оговорка": "Medical disclaimer",
+ "Приложение не является медицинским изделием и не даёт медицинских рекомендаций.": "The app is not a medical device and gives no medical advice.",
+ "Контакты": "Contact",
+ "Вопросы о конфиденциальности:": "Privacy questions:",
+ "⏰ Напоминание": "⏰ Reminder",
+ "Доброй ночи": "Good night",
+ "Доброе утро": "Good morning",
+ "Добрый день": "Good afternoon",
+ "Добрый вечер": "Good evening",
+ "Сегодня": "Today",
+ "Таблетки": "Pills",
+ "Медали": "Medals",
+ "Статистика": "Stats",
+ "Архив": "Archive",
+ "Баллы: {0}": "Points: {0}",
+ "Настройки": "Settings",
+ "Язык": "Language",
+ "Тема": "Theme",
+ "Авто": "Auto",
+ "Светлая": "Light",
+ "Тёмная": "Dark",
+ "Будильники": "Alarms",
+ "Все будильники": "All alarms",
+ "Привычки и лекарства": "Habits and medications",
+ "Мелодия": "Melody",
+ "Мелодия по умолчанию": "Default melody",
+ "По умолчанию": "Default",
+ "Классический": "Classic",
+ "Перезвон": "Chime",
+ "Нарастающий": "Rising",
+ "Электронный": "Digital",
+ "Своя мелодия": "My own song",
+ "Выбрать файл": "Choose file",
+ "Заменить файл": "Replace file",
+ "Файл не выбран": "No file chosen",
+ "Прослушать": "Listen",
+ "Файл слишком большой — выберите до 30 МБ": "The file is too large — choose one up to 30 MB",
+ "Не удалось сохранить мелодию": "Could not save the melody",
+ "Своя мелодия играет, когда приложение открыто. Если оно закрыто, уведомление приходит со стандартным звуком телефона.": "Your own song plays when the app is open. If it is closed, the notification uses the phone’s standard sound.",
+ "Защита входа": "App lock",
+ "Выключена": "Off",
+ "Код": "Passcode",
+ "Рисунок": "Pattern",
+ "Включена: код": "On: passcode",
+ "Включена: рисунок": "On: pattern",
+ "Выключить защиту": "Turn off lock",
+ "Вход по Face ID": "Unlock with Face ID",
+ "Вход по Touch ID": "Unlock with Touch ID",
+ "Вход по отпечатку или лицу": "Unlock with fingerprint or face",
+ "Придумайте код": "Create a passcode",
+ "От 4 до 8 цифр": "4 to 8 digits",
+ "Повторите код": "Repeat the passcode",
+ "Коды не совпали — попробуйте ещё раз": "The passcodes did not match — try again",
+ "Нарисуйте рисунок": "Draw a pattern",
+ "Соедините не меньше 4 точек": "Connect at least 4 dots",
+ "Повторите рисунок": "Repeat the pattern",
+ "Рисунки не совпали — попробуйте ещё раз": "The patterns did not match — try again",
+ "Далее": "Next",
+ "Введите код": "Enter passcode",
+ "Нарисуйте рисунок для входа": "Draw your pattern to unlock",
+ "Неверный код": "Wrong passcode",
+ "Неверный рисунок": "Wrong pattern",
+ "Слишком много попыток. Подождите {0} с": "Too many attempts. Wait {0} s",
+ "Забыли код?": "Forgot it?",
+ "Сбросить приложение? Все привычки, отметки и лекарства на этом устройстве будут удалены.": "Reset the app? All habits, check-ins and medications on this device will be deleted.",
+ "Сбросить и удалить данные": "Reset and delete data",
+ "Отмена": "Cancel",
+ "Войти по биометрии": "Use biometrics",
+ "Вход в «Привычки»": "Unlock Habits",
+ "Ввести код": "Enter passcode",
+ "Стереть": "Delete digit",
+ "Привычки": "Habits",
+ "Защита закрывает вход в приложение на этом устройстве. Данные не шифруются.": "The lock protects access to the app on this device. Data is not encrypted.",
+ "Защита входа доступна в приложении для телефона.": "App lock is available in the phone app.",
+ "Сработал будильник": "An alarm is ringing",
+ "Цифра {0}": "Digit {0}",
+ "Поле для рисунка": "Pattern area"
+}, he: {
+ "Здоровье": "בריאות",
+ "Продуктивность": "פרודוקטיביות",
+ "Спорт": "ספורט",
+ "Ментальное здоровье": "בריאות הנפש",
+ "Ментальное": "נפש",
+ "Утро": "בוקר",
+ "День": "צהריים",
+ "Вечер": "ערב",
+ "Любое время": "בכל שעה",
+ "Любое": "הכול",
+ "Вс": "א'",
+ "Пн": "ב'",
+ "Вт": "ג'",
+ "Ср": "ד'",
+ "Чт": "ה'",
+ "Пт": "ו'",
+ "Сб": "ש'",
+ "Ежедневно": "כל יום",
+ "{0} {1} в неделю": "{0} {1} בשבוע",
+ "Бронза": "ארד",
+ "Серебро": "כסף",
+ "Золото": "זהב",
+ "1–10 дней": "1–10 ימים",
+ "20–100 дней": "20–100 ימים",
+ "200–1000 дней": "200–1000 ימים",
+ "через {0} мин": "בעוד {0} דק׳",
+ "через {0} ч": "בעוד {0} שע׳",
+ "через {0} ч {1} мин": "בעוד {0} שע׳ {1} דק׳",
+ "Напоминания": "תזכורות",
+ "Напоминания о привычках и лекарствах": "תזכורות להרגלים ולתרופות",
+ "Пора принять лекарство": "הגיע הזמן לקחת תרופה",
+ "Напоминание о привычке": "תזכורת להרגל",
+ "Выпить стакан воды": "לשתות כוס מים",
+ "Утренняя зарядка": "התעמלות בוקר",
+ "Чтение 20 минут": "קריאה 20 דקות",
+ "Медитация 10 минут": "מדיטציה 10 דקות",
+ "На сегодня ничего не запланировано": "אין משימות להיום",
+ "Все привычки выполнены — вы молодец!": "כל ההרגלים בוצעו — כל הכבוד!",
+ "Начнём день с маленького шага": "נתחיל את היום בצעד קטן",
+ "Отличный темп — осталось {0}": "קצב מצוין — נשארו {0}",
+ "Прогресс за сегодня": "ההתקדמות היום",
+ "Выполнено": "בוצע",
+ "из": "מתוך",
+ "Снять отметку: {0}": "ביטול סימון: {0}",
+ "Отметить выполнение: {0}": "סימון כבוצע: {0}",
+ "Цель недели выполнена ✓": "היעד השבועי הושג ✓",
+ "Последние 7 дней": "7 הימים האחרונים",
+ "выполнено": "בוצע",
+ "не выполнено": "לא בוצע",
+ "не по плану": "לא בתוכנית",
+ "Серия: {0} {1}": "רצף: {0} {1}",
+ "нед": "שב׳",
+ "дн": "ימ׳",
+ "Действия": "פעולות",
+ "В архив": "לארכיון",
+ "Удалить": "מחיקה",
+ "Точно удалить?": "למחוק בוודאות?",
+ "Изменить": "עריכה",
+ "Пока нет привычек на сегодня": "אין עדיין הרגלים להיום",
+ "Добавьте первую — начать можно с чего-то совсем простого.": "הוסיפו את הראשון — אפשר להתחיל ממשהו פשוט ממש.",
+ "Новая привычка": "הרגל חדש",
+ "Сегодня не по плану:": "לא בתוכנית היום:",
+ "Баллы · 1 день = 1 балл": "נקודות · יום 1 = נקודה 1",
+ "Средний уровень": "רמה ממוצעת",
+ "Лучшая серия · {0}": "הרצף הטוב ביותר · {0}",
+ "Активность": "פעילות",
+ "последние": "אחרונים:",
+ "недель": "שבועות",
+ "нет привычек": "אין הרגלים",
+ "Меньше": "פחות",
+ "Больше": "יותר",
+ "По привычкам · 30 дней": "לפי הרגל · 30 יום",
+ "Нет активных привычек.": "אין הרגלים פעילים.",
+ "за 30 дн": "ב-30 יום",
+ "Баллы за активность": "נקודות פעילות",
+ "1 день с выполненной привычкой = 1 балл": "יום עם הרגל שבוצע = נקודה אחת",
+ "медалей": "מדליות",
+ "Следующая: «Вы продержались": "הבאה: «התמדתם",
+ "»": "»",
+ "ещё": "נותרו",
+ "Все медали собраны — это легендарно! 🏆": "כל המדליות נאספו — אגדי! 🏆",
+ "Получена: вы продержались {0} {1}": "הושגה: התמדתם {0} {1}",
+ "Откроется через {0} {1}": "תיפתח בעוד {0} {1}",
+ "Вы продержались": "התמדתם",
+ "Напоминания могут опаздывать": "התזכורות עלולות להתעכב",
+ "Чтобы уведомление приходило ровно в назначенное время, разрешите приложению «Будильники и напоминания».": "כדי שההתראה תגיע בדיוק בזמן, אשרו לאפליקציה «שעונים מעוררים ותזכורות».",
+ "Разрешить точные напоминания": "אישור תזכורות מדויקות",
+ "Расписание приёма пока пустое": "לוח התרופות עדיין ריק",
+ "Добавьте лекарство, время приёма — и будильник напомнит о нём.": "הוסיפו תרופה ושעה — והשעון המעורר יזכיר לכם.",
+ "Приложение только напоминает о приёме и не даёт медицинских рекомендаций. Не заменяет консультацию врача — дозировку и схему приёма определяет специалист.": "האפליקציה רק מזכירה לקחת תרופות ואינה נותנת ייעוץ רפואי. היא אינה מחליפה רופא — את המינון ולוח הנטילה קובע איש מקצוע.",
+ "Добавить лекарство": "הוספת תרופה",
+ "Приём таблеток сегодня": "תרופות היום",
+ "Принято": "נלקחו",
+ "Следующий приём в": "המנה הבאה בשעה",
+ "Все лекарства на сегодня приняты": "כל התרופות להיום נלקחו",
+ "На сегодня больше приёмов нет": "אין עוד מנות להיום",
+ "Будильник": "שעון מעורר",
+ "Звонит в назначенное время": "מצלצל בשעה שנקבעה",
+ "Выключен для привычек и лекарств": "כבוי להרגלים ולתרופות",
+ "Проверить звук": "בדיקת צליל",
+ "Звук работает ✓": "הצליל פועל ✓",
+ "Браузер не дал включить звук — проверьте беззвучный режим": "הדפדפן חסם את הצליל — בדקו את המצב השקט",
+ "Напоминания приходят уведомлением, даже если приложение закрыто и телефон заблокирован.": "התזכורות מגיעות כהתראה גם כשהאפליקציה סגורה והטלפון נעול.",
+ "Будильник звонит, пока трекер открыт на экране. Если приложение закрыто или телефон заблокирован, сигнала не будет.": "השעון המעורר מצלצל כשהאפליקציה פתוחה על המסך. אם היא סגורה או שהטלפון נעול, לא יישמע צליל.",
+ "Расписание на сегодня": "לוח הזמנים להיום",
+ "Сегодня приёмов нет.": "אין מנות היום.",
+ "· принято в": "· נלקח בשעה",
+ "· пропущено": "· הוחמץ",
+ "Отменить приём": "ביטול נטילה",
+ "Отметить приём": "סימון נטילה",
+ "Принять": "לקחתי",
+ "Мои лекарства": "התרופות שלי",
+ "Добавить": "הוספה",
+ "каждый день": "כל יום",
+ "1 таблетка": "טבליה אחת",
+ "Введите название лекарства": "הזינו את שם התרופה",
+ "Добавьте хотя бы одно время приёма": "הוסיפו לפחות שעה אחת",
+ "Выберите дни недели": "בחרו ימים בשבוע",
+ "Лекарство": "תרופה",
+ "Новое лекарство": "תרופה חדשה",
+ "Закрыть": "סגירה",
+ "Название": "שם",
+ "Например, «Витамин D»": "למשל «ויטמין D»",
+ "Дозировка": "מינון",
+ "Заметка": "הערה",
+ "после еды": "אחרי האוכל",
+ "Время приёма": "שעת נטילה",
+ "Время {0}": "שעה {0}",
+ "Убрать время": "הסרת שעה",
+ "Ещё время": "שעה נוספת",
+ "Дни": "ימים",
+ "Каждый день": "כל יום",
+ "По дням": "ימים נבחרים",
+ "Будильник для этого лекарства": "שעון מעורר לתרופה זו",
+ "Цвет": "צבע",
+ "Цвет {0}": "צבע {0}",
+ "Сохранить": "שמירה",
+ "Добавить в расписание": "הוספה ללוח",
+ "Удалить лекарство": "מחיקת תרופה",
+ "Пора принять": "הגיע הזמן לקחת",
+ "Напоминание": "תזכורת",
+ "Через 10 мин": "בעוד 10 דק׳",
+ "Принял(а)": "לקחתי",
+ "Выключить": "כיבוי",
+ "Новая медаль!": "מדליה חדשה!",
+ "Отлично!": "מעולה!",
+ "Архив пуст": "הארכיון ריק",
+ "Сюда попадают привычки, которые вы поставили на паузу. История при этом сохраняется.": "לכאן מגיעים הרגלים שהשהיתם. ההיסטוריה נשמרת.",
+ "Вернуть": "שחזור",
+ "Вернуть из архива": "שחזור מהארכיון",
+ "Удалить?": "למחוק?",
+ "Введите название привычки": "הזינו את שם ההרגל",
+ "Выберите хотя бы один день недели": "בחרו לפחות יום אחד",
+ "Например, «Пройти 8 000 шагов»": "למשל «ללכת 8,000 צעדים»",
+ "Категория": "קטגוריה",
+ "Частота": "תדירות",
+ "X раз/нед": "X פעמים/שב׳",
+ "Раз в неделю": "פעמים בשבוע",
+ "Время суток": "שעה ביום",
+ "Добавить привычку": "הוספת הרגל",
+ "Привычка": "הרגל",
+ "Время": "שעה",
+ "Напомнить в назначенное время": "תזכורת בשעה קבועה",
+ "Политика конфиденциальности": "מדיניות פרטיות",
+ "Действует с 15 ноября 2026 года. Относится к приложению «Привычки».": "בתוקף מ-15 בנובמבר 2026. חלה על האפליקציה «הרגלים».",
+ "Какие данные хранятся": "אילו נתונים נשמרים",
+ "Ваши привычки, отметки о выполнении, список лекарств, время приёма и настройки. Всё это хранится только на вашем устройстве.": "ההרגלים שלכם, הסימונים, רשימת התרופות, שעות הנטילה וההגדרות. הכול נשמר רק במכשיר שלכם.",
+ "Что мы не делаем": "מה איננו עושים",
+ "Мы не собираем, не отправляем на серверы и не передаём третьим лицам ваши данные. В приложении нет регистрации, рекламы и аналитики.": "איננו אוספים את הנתונים שלכם, איננו שולחים אותם לשרתים ואיננו מעבירים אותם לצד שלישי. באפליקציה אין הרשמה, פרסומות או אנליטיקה.",
+ "Разрешения": "הרשאות",
+ "Уведомления и будильники нужны только для напоминаний о привычках и приёме лекарств. Запуск после перезагрузки нужен, чтобы восстановить запланированные напоминания. Биометрия (Face ID, отпечаток) используется только для входа в приложение и обрабатывается самим устройством.": "התראות ושעונים מעוררים משמשים רק לתזכורות על הרגלים ותרופות. הפעלה לאחר אתחול נדרשת כדי לשחזר תזכורות מתוזמנות. ביומטריה (Face ID, טביעת אצבע) משמשת רק לכניסה לאפליקציה ומעובדת במכשיר עצמו.",
+ "Удаление данных": "מחיקת נתונים",
+ "Удалить данные можно в самом приложении или удалив приложение с устройства. Восстановить их после этого нельзя: копий у нас нет.": "אפשר למחוק את הנתונים באפליקציה עצמה או בהסרת האפליקציה. לא ניתן לשחזר אותם לאחר מכן: אין לנו עותקים.",
+ "Медицинская оговорка": "הבהרה רפואית",
+ "Приложение не является медицинским изделием и не даёт медицинских рекомендаций.": "האפליקציה אינה מכשיר רפואי ואינה נותנת ייעוץ רפואי.",
+ "Контакты": "יצירת קשר",
+ "Вопросы о конфиденциальности:": "שאלות בנושא פרטיות:",
+ "⏰ Напоминание": "⏰ תזכורת",
+ "Доброй ночи": "לילה טוב",
+ "Доброе утро": "בוקר טוב",
+ "Добрый день": "צהריים טובים",
+ "Добрый вечер": "ערב טוב",
+ "Сегодня": "היום",
+ "Таблетки": "תרופות",
+ "Медали": "מדליות",
+ "Статистика": "סטטיסטיקה",
+ "Архив": "ארכיון",
+ "Баллы: {0}": "נקודות: {0}",
+ "Настройки": "הגדרות",
+ "Язык": "שפה",
+ "Тема": "ערכת נושא",
+ "Авто": "אוטומטי",
+ "Светлая": "בהירה",
+ "Тёмная": "כהה",
+ "Будильники": "שעונים מעוררים",
+ "Все будильники": "כל השעונים המעוררים",
+ "Привычки и лекарства": "הרגלים ותרופות",
+ "Мелодия": "מנגינה",
+ "Мелодия по умолчанию": "מנגינת ברירת מחדל",
+ "По умолчанию": "ברירת מחדל",
+ "Классический": "קלאסי",
+ "Перезвон": "פעמונים",
+ "Нарастающий": "עולה",
+ "Электронный": "דיגיטלי",
+ "Своя мелодия": "שיר משלי",
+ "Выбрать файл": "בחירת קובץ",
+ "Заменить файл": "החלפת קובץ",
+ "Файл не выбран": "לא נבחר קובץ",
+ "Прослушать": "האזנה",
+ "Файл слишком большой — выберите до 30 МБ": "הקובץ גדול מדי — בחרו קובץ עד 30 מ״ב",
+ "Не удалось сохранить мелодию": "לא ניתן היה לשמור את המנגינה",
+ "Своя мелодия играет, когда приложение открыто. Если оно закрыто, уведомление приходит со стандартным звуком телефона.": "השיר שלכם מתנגן כשהאפליקציה פתוחה. אם היא סגורה, ההתראה מגיעה עם הצליל הרגיל של הטלפון.",
+ "Защита входа": "נעילת האפליקציה",
+ "Выключена": "כבויה",
+ "Код": "קוד",
+ "Рисунок": "קו ביטול נעילה",
+ "Включена: код": "פעילה: קוד",
+ "Включена: рисунок": "פעילה: קו ביטול נעילה",
+ "Выключить защиту": "כיבוי הנעילה",
+ "Вход по Face ID": "כניסה עם Face ID",
+ "Вход по Touch ID": "כניסה עם Touch ID",
+ "Вход по отпечатку или лицу": "כניסה עם טביעת אצבע או פנים",
+ "Придумайте код": "צרו קוד",
+ "От 4 до 8 цифр": "4 עד 8 ספרות",
+ "Повторите код": "הזינו שוב את הקוד",
+ "Коды не совпали — попробуйте ещё раз": "הקודים אינם תואמים — נסו שוב",
+ "Нарисуйте рисунок": "ציירו קו ביטול נעילה",
+ "Соедините не меньше 4 точек": "חברו לפחות 4 נקודות",
+ "Повторите рисунок": "ציירו שוב",
+ "Рисунки не совпали — попробуйте ещё раз": "הציורים אינם תואמים — נסו שוב",
+ "Далее": "הבא",
+ "Введите код": "הזינו קוד",
+ "Нарисуйте рисунок для входа": "ציירו את הקו כדי להיכנס",
+ "Неверный код": "קוד שגוי",
+ "Неверный рисунок": "ציור שגוי",
+ "Слишком много попыток. Подождите {0} с": "יותר מדי ניסיונות. המתינו {0} שנ׳",
+ "Забыли код?": "שכחתם?",
+ "Сбросить приложение? Все привычки, отметки и лекарства на этом устройстве будут удалены.": "לאפס את האפליקציה? כל ההרגלים, הסימונים והתרופות במכשיר זה יימחקו.",
+ "Сбросить и удалить данные": "איפוס ומחיקת נתונים",
+ "Отмена": "ביטול",
+ "Войти по биометрии": "כניסה ביומטרית",
+ "Вход в «Привычки»": "כניסה ל«הרגלים»",
+ "Ввести код": "הזנת קוד",
+ "Стереть": "מחיקת ספרה",
+ "Привычки": "הרגלים",
+ "Защита закрывает вход в приложение на этом устройстве. Данные не шифруются.": "הנעילה חוסמת את הכניסה לאפליקציה במכשיר זה. הנתונים אינם מוצפנים.",
+ "Защита входа доступна в приложении для телефона.": "נעילת האפליקציה זמינה באפליקציה לטלפון.",
+ "Сработал будильник": "שעון מעורר מצלצל",
+ "Цифра {0}": "ספרה {0}",
+ "Поле для рисунка": "אזור הציור"
+} };
+const tr = s => {
+  const d = DICT[LANG];
+  if (!d) return s;
+  const m = s.match(/^(\s*)([\s\S]*?)(\s*)$/), v = d[m[2]];
+  return v == null ? s : m[1] + v + m[3];
+};
+const L = (s, ...a) => {
+  let v = (DICT[LANG] && DICT[LANG][s]) || s;
+  a.forEach((x, i) => { v = v.split('{' + i + '}').join(x); });
+  return v;
+};
+const TR_PROPS = ['placeholder', 'aria-label', 'title'];
+function JSXT(type, props, ...children) {
+  if (LANG !== 'ru') {
+    if (props) for (const k of TR_PROPS) if (typeof props[k] === 'string') props = { ...props, [k]: tr(props[k]) };
+    children = children.map(c => typeof c === 'string' ? tr(c) : c);
+  }
+  return React.createElement(type, props, ...children);
+}
 
 /* ---------- Иконки (Lucide) ---------- */
 const ICONS = {
@@ -79,6 +622,11 @@ const ICONS = {
   volume: <><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M15.54 8.46a5 5 0 0 1 0 7.07" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14" /></>,
   lock: <><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>,
   medal: <><path d="M7.21 15 2.66 7.14a2 2 0 0 1 .13-2.2L4.4 2.8A2 2 0 0 1 6 2h12a2 2 0 0 1 1.6.8l1.6 2.14a2 2 0 0 1 .14 2.2L16.79 15" /><path d="M11 12 5.12 2.2" /><path d="m13 12 5.88-9.8" /><path d="M8 7h8" /><circle cx="12" cy="17" r="5" /><path d="M12 18v-2h-.5" /></>,
+  settings: <><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" /><circle cx="12" cy="12" r="3" /></>,
+  shield: <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />,
+  play: <polygon points="6 3 20 12 6 21 6 3" />,
+  music: <><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></>,
+  backspace: <><path d="M10 5a2 2 0 0 0-1.344.519l-6.328 5.74a1 1 0 0 0 0 1.481l6.328 5.741A2 2 0 0 0 10 19h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z" /><path d="m12 9 6 6" /><path d="m18 9-6 6" /></>,
   star: <path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z" />,
 };
 function Icon({ name, size = 20, stroke = 2, className = '', fill = 'none', fillOpacity }) {
@@ -115,6 +663,7 @@ const dayStart = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 const addDays = (d, n) => { const x = dayStart(d); x.setDate(x.getDate() + n); return x; };
 const startOfWeek = d => addDays(d, -((d.getDay() + 6) % 7));
 const plural = (n, [one, few, many]) => {
+  if (LANG !== 'ru') { const f = (PLURALS[LANG] || {})[one]; if (f) return n === 1 ? f[0] : f[1]; }
   const a = n % 10, b = n % 100;
   if (a === 1 && b !== 11) return one;
   if (a >= 2 && a <= 4 && (b < 10 || b >= 20)) return few;
@@ -146,9 +695,9 @@ function streak(h, today) {
   }
   return { n: s, unit: plural(s, ['день', 'дня', 'дней']) };
 }
-const freqText = h => h.freq === 'daily' ? 'Ежедневно'
-  : h.freq === 'days' ? WD_ORDER.filter(x => h.days.includes(x)).map(x => WD[x]).join(', ')
-  : `${h.times} ${plural(h.times, ['раз', 'раза', 'раз'])} в неделю`;
+const freqText = h => h.freq === 'daily' ? L('Ежедневно')
+  : h.freq === 'days' ? WD_ORDER.filter(x => h.days.includes(x)).map(x => L(WD[x])).join(', ')
+  : L('{0} {1} в неделю', h.times, plural(h.times, ['раз', 'раза', 'раз']));
 
 function todayItems(habits, now) {
   const k = keyOf(now);
@@ -191,8 +740,12 @@ const daysWord = n => plural(n, ['день', 'дня', 'дней']);
 const medToday = (m, d) => !m.days || !m.days.length || m.days.includes(d.getDay());
 const hmOf = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
 const toMin = t => { const [h, m] = t.split(':').map(Number); return h * 60 + m; };
-const inText = mins => mins < 60 ? `через ${mins} мин` : `через ${Math.floor(mins / 60)} ч${mins % 60 ? ' ' + (mins % 60) + ' мин' : ''}`;
+const inText = mins => mins < 60 ? L('через {0} мин', mins) : mins % 60 ? L('через {0} ч {1} мин', Math.floor(mins / 60), mins % 60) : L('через {0} ч', mins / 60);
 
+/* ---------- Мелодии будильника ---------- */
+const TONES = [['classic', 'Классический'], ['chime', 'Перезвон'], ['rise', 'Нарастающий'], ['digital', 'Электронный']];
+const MELODY_KEY = 'habit-melody-name';
+let DEFAULT_SOUND = 'classic';
 const sound = (() => {
   let ctx = null;
   const unlock = () => {
@@ -202,27 +755,118 @@ const sound = (() => {
     } catch (e) {}
   };
   ['pointerdown', 'keydown', 'touchstart'].forEach(ev => addEventListener(ev, unlock, { passive: true }));
-  const beep = () => {
+  // [начало, частота, длительность, форма волны]
+  const PAT = {
+    classic: [[0, 880, .16], [.18, 880, .16], [.36, 1175, .16]],
+    chime: [[0, 1047, .5], [.22, 1319, .5], [.44, 1568, .7]],
+    rise: [[0, 523, .13], [.14, 659, .13], [.28, 784, .13], [.42, 1047, .3]],
+    digital: [[0, 1400, .07, 'square'], [.11, 1400, .07, 'square'], [.22, 1400, .07, 'square'], [.33, 1400, .07, 'square']],
+  };
+  const tone = id => {
     try {
       if (!ctx || ctx.state !== 'running') return false;
-      const t = ctx.currentTime;
-      [0, 0.18, 0.36].forEach((o, i) => {
+      const t0 = ctx.currentTime;
+      (PAT[id] || PAT.classic).forEach(([o, f, d, w]) => {
         const osc = ctx.createOscillator(), g = ctx.createGain();
-        osc.type = 'sine'; osc.frequency.value = i === 2 ? 1175 : 880;
-        g.gain.setValueAtTime(0.0001, t + o);
-        g.gain.linearRampToValueAtTime(0.3, t + o + 0.02);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + o + 0.16);
+        osc.type = w || 'sine'; osc.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, t0 + o);
+        g.gain.linearRampToValueAtTime(w ? 0.12 : 0.3, t0 + o + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + o + d);
         osc.connect(g); g.connect(ctx.destination);
-        osc.start(t + o); osc.stop(t + o + 0.17);
+        osc.start(t0 + o); osc.stop(t0 + o + d + 0.01);
       });
       return true;
     } catch (e) { return false; }
   };
-  return { unlock, beep };
+  // своя мелодия хранится на устройстве (IndexedDB), в общие данные не попадает
+  const idb = (mode, fn) => new Promise((res, rej) => {
+    const rq = indexedDB.open('habit-tracker', 1);
+    rq.onupgradeneeded = () => rq.result.createObjectStore('files');
+    rq.onerror = () => rej(rq.error);
+    rq.onsuccess = () => {
+      const tx = rq.result.transaction('files', mode), r = fn(tx.objectStore('files'));
+      tx.oncomplete = () => res(r && r.result); tx.onerror = () => rej(tx.error);
+    };
+  });
+  let customUrl = null, audio = null, loop = null, stopT = null;
+  const loadCustom = async () => {
+    if (!customUrl) try { const f = await idb('readonly', s => s.get('melody')); if (f) customUrl = URL.createObjectURL(f); } catch (e) {}
+    return customUrl;
+  };
+  const setCustom = async file => {
+    await idb('readwrite', s => s.put(file, 'melody'));
+    if (customUrl) URL.revokeObjectURL(customUrl);
+    customUrl = URL.createObjectURL(file);
+  };
+  const stop = () => {
+    clearInterval(loop); clearTimeout(stopT); loop = null;
+    if (audio) { try { audio.pause(); } catch (e) {} audio = null; }
+  };
+  // once — короткое прослушивание; иначе звонит, пока не остановят (не дольше 90 секунд для сигналов)
+  const start = async (id, opts = {}) => {
+    stop(); unlock();
+    if (id === 'custom') {
+      const url = await loadCustom();
+      if (url) try {
+        const a = new Audio(url); a.loop = !opts.once; audio = a;
+        await a.play();
+        stopT = setTimeout(() => { if (audio === a) stop(); }, opts.once ? 8000 : 180000);
+        return true;
+      } catch (e) { audio = null; }
+      id = 'classic';
+    }
+    const ok = tone(id);
+    if (!opts.once) { let n = 0; loop = setInterval(() => { if (++n > 60) return stop(); tone(id); }, 1500); }
+    return ok;
+  };
+  return { unlock, beep: () => tone('classic'), start, stop, setCustom, playing: () => !!(audio || loop) };
 })();
 
-/* ---------- Приложение для Android (Capacitor): уведомления и кнопка «Назад» ---------- */
-const NATIVE = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() ? window.Capacitor.Plugins : null;
+/* ---------- Защита входа: код или рисунок (хранится только на этом устройстве) ---------- */
+function sha256(str) {
+  const K = [], H = [], rr = (x, n) => (x >>> n) | (x << (32 - n));
+  let c = 0;
+  for (let n = 2; c < 64; n++) {
+    let p = true; for (let i = 2; i * i <= n; i++) if (n % i === 0) { p = false; break; }
+    if (!p) continue;
+    if (c < 8) H[c] = (Math.pow(n, 1 / 2) * 4294967296) | 0;
+    K[c++] = (Math.pow(n, 1 / 3) * 4294967296) | 0;
+  }
+  const bytes = Array.from(new TextEncoder().encode(str)), bits = bytes.length * 8;
+  bytes.push(0x80); while (bytes.length % 64 !== 56) bytes.push(0);
+  for (let i = 7; i >= 0; i--) bytes.push(i > 3 ? 0 : (bits >>> (i * 8)) & 255);
+  const w = new Array(64);
+  for (let o = 0; o < bytes.length; o += 64) {
+    for (let i = 0; i < 16; i++) w[i] = (bytes[o + i * 4] << 24) | (bytes[o + i * 4 + 1] << 16) | (bytes[o + i * 4 + 2] << 8) | bytes[o + i * 4 + 3];
+    for (let i = 16; i < 64; i++) {
+      const s0 = rr(w[i - 15], 7) ^ rr(w[i - 15], 18) ^ (w[i - 15] >>> 3), s1 = rr(w[i - 2], 17) ^ rr(w[i - 2], 19) ^ (w[i - 2] >>> 10);
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
+    }
+    let [a, b, cc, d, e, f, g, h] = H;
+    for (let i = 0; i < 64; i++) {
+      const t1 = (h + (rr(e, 6) ^ rr(e, 11) ^ rr(e, 25)) + ((e & f) ^ (~e & g)) + K[i] + w[i]) | 0;
+      const t2 = ((rr(a, 2) ^ rr(a, 13) ^ rr(a, 22)) + ((a & b) ^ (a & cc) ^ (b & cc))) | 0;
+      h = g; g = f; f = e; e = (d + t1) | 0; d = cc; cc = b; b = a; a = (t1 + t2) | 0;
+    }
+    [a, b, cc, d, e, f, g, h].forEach((v, i) => { H[i] = (H[i] + v) | 0; });
+  }
+  return H.map(v => (v >>> 0).toString(16).padStart(8, '0')).join('');
+}
+const LOCK_KEY = 'habit-lock-v1';
+const lockStore = {
+  get() { try { const c = JSON.parse(localStorage.getItem(LOCK_KEY) || 'null'); return c && c.hash ? c : null; } catch (e) { return null; } },
+  set(c) { try { if (c) localStorage.setItem(LOCK_KEY, JSON.stringify(c)); else localStorage.removeItem(LOCK_KEY); } catch (e) {} },
+};
+const lockHash = (salt, secret) => sha256(salt + ':' + secret);
+const makeLock = (type, secret, bioOn) => {
+  const salt = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  return { type, len: secret.length, salt, hash: lockHash(salt, secret), bio: !!bioOn };
+};
+
+/* ---------- Приложение для телефона (Capacitor): уведомления, биометрия, кнопка «Назад» ---------- */
+const NATIVE = window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform() ? (window.Capacitor.Plugins || {}) : null;
+const habitDueOn = (h, day) => !h.archived && !!h.remind && h.createdAt <= keyOf(day) && isScheduledOn(h, day)
+  && !h.history[keyOf(day)] && !(h.freq === 'times' && weekCount(h, day) >= h.times);
 const notify = (() => {
   const LN = NATIVE && NATIVE.LocalNotifications;
   let timer = null, ready = null, snoozeId = 900000;
@@ -230,16 +874,16 @@ const notify = (() => {
     let p = await LN.checkPermissions();
     if (p.display !== 'granted') p = await LN.requestPermissions();
     if (p.display !== 'granted') return false;
-    try { await LN.createChannel({ id: 'meds', name: 'Приём лекарств', description: 'Напоминания о таблетках', importance: 5, visibility: 1, vibration: true, lights: true }); } catch (e) {}
+    try { await LN.createChannel({ id: 'meds', name: L('Напоминания'), description: L('Напоминания о привычках и лекарствах'), importance: 5, visibility: 1, vibration: true, lights: true }); } catch (e) {}
     return true;
   })().catch(() => { ready = null; return false; }));
-  const text = (m, t) => `${t} · ${m.name}${m.dose ? ' · ' + m.dose : ''}${m.note ? ' · ' + m.note : ''}`;
+  const medText = (m, tm) => `${tm} · ${m.name}${m.dose ? ' · ' + m.dose : ''}${m.note ? ' · ' + m.note : ''}`;
   // Точные напоминания (Android 12+) пользователь разрешает сам в настройках «Будильники и напоминания».
   // Без разрешения ставим обычные: Android может сдвинуть их на несколько минут, но не открываем настройки сами.
   const exactOk = async () => {
     try { return (await LN.checkExactNotificationSetting()).exact_alarm === 'granted'; } catch (e) { return true; }
   };
-  // Планируем уведомления на 14 дней вперёд; уже принятые приёмы пропускаем
+  // Планируем уведомления на 14 дней вперёд; уже принятые лекарства и выполненные привычки пропускаем
   async function plan(s) {
     if (!LN || !(await prepare())) return;
     const pending = (await LN.getPending()).notifications.filter(n => n.id < 900000);
@@ -250,34 +894,49 @@ const notify = (() => {
     const ios = window.Capacitor.getPlatform && window.Capacitor.getPlatform() === 'ios';
     const max = ios ? 60 : 400;
     const now = new Date(), list = [];
-    for (let i = 0; i < 14 && list.length < max; i++) {
+    for (let i = 0; i < 14; i++) {
       const day = addDays(now, i), log = (s.medLog || {})[keyOf(day)] || {};
+      const at = hm => { const d = new Date(day); d.setHours(+hm.slice(0, 2), +hm.slice(3, 5), 0, 0); return d; };
       for (const m of s.meds || []) {
         if (!m.alarm || !medToday(m, day)) continue;
-        for (const t of m.times) {
-          if (log[`${m.id}@${t}`]) continue;
-          const at = new Date(day); at.setHours(+t.slice(0, 2), +t.slice(3, 5), 0, 0);
-          if (at > now && list.length < max) list.push({ id: list.length + 1, title: 'Пора принять лекарство', body: text(m, t), channelId: 'meds', isExactNotification: exact, schedule: { at, allowWhileIdle: true } });
-        }
+        for (const tm of m.times) if (!log[`${m.id}@${tm}`]) list.push({ at: at(tm), title: L('Пора принять лекарство'), body: medText(m, tm) });
       }
+      for (const h of s.habits || []) if (habitDueOn(h, day)) list.push({ at: at(h.remind), title: L('Напоминание о привычке'), body: `${h.remind} · ${h.name}` });
     }
-    if (list.length) await LN.schedule({ notifications: list });
+    const items = list.filter(x => x.at > now).sort((a, b) => a.at - b.at).slice(0, max)
+      .map((x, i) => ({ id: i + 1, title: x.title, body: x.body, channelId: 'meds', isExactNotification: exact, schedule: { at: x.at, allowWhileIdle: true } }));
+    if (items.length) await LN.schedule({ notifications: items });
   }
   return {
     available: !!LN,
     plan: s => { if (!LN) return; clearTimeout(timer); timer = setTimeout(() => plan(s).catch(() => {}), 800); },
-    snooze: (m, t, at) => { if (LN) prepare().then(async ok => ok && LN.schedule({ notifications: [{ id: snoozeId++, title: 'Пора принять лекарство', body: text(m, t), channelId: 'meds', isExactNotification: await exactOk(), schedule: { at, allowWhileIdle: true } }] })).catch(() => {}); },
+    snooze: (title, body, at) => { if (LN) prepare().then(async ok => ok && LN.schedule({ notifications: [{ id: snoozeId++, title, body, channelId: 'meds', isExactNotification: await exactOk(), schedule: { at, allowWhileIdle: true } }] })).catch(() => {}); },
     exactOk: () => LN ? exactOk() : Promise.resolve(true),
     askExact: async () => { if (!LN) return true; try { return (await LN.changeExactNotificationSetting()).exact_alarm === 'granted'; } catch (e) { return false; } },
   };
 })();
-if (NATIVE && NATIVE.App) {
+const bio = (() => {
+  const NB = NATIVE && NATIVE.NativeBiometric;
+  return {
+    // type: 1 — Touch ID, 2 — Face ID, остальное — отпечаток или лицо на Android
+    check: async () => { if (!NB) return { ok: false }; try { const r = await NB.isAvailable({ useFallback: false }); return { ok: !!r.isAvailable, type: r.biometryType }; } catch (e) { return { ok: false }; } },
+    verify: async () => {
+      if (!NB) return false;
+      try { await NB.verifyIdentity({ reason: L('Вход в «Привычки»'), title: L('Вход в «Привычки»'), negativeButtonText: L('Ввести код'), maxAttempts: 3 }); return true; } catch (e) { return false; }
+    },
+  };
+})();
+const bioLabel = type => type === 2 ? 'Вход по Face ID' : type === 1 ? 'Вход по Touch ID' : 'Вход по отпечатку или лицу';
+if (NATIVE) {
   // «Назад»: закрыть открытое окно или меню, иначе свернуть приложение (данные не теряются)
-  NATIVE.App.addListener('backButton', () => {
+  if (NATIVE.App) NATIVE.App.addListener('backButton', () => {
     if (document.querySelector('[role="dialog"], [role="alertdialog"], .menu-open')) {
       document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
     } else NATIVE.App.minimizeApp();
   });
+  // строка для проверки сборки: функции телефона подключены
+  Promise.resolve().then(() => NATIVE.LocalNotifications.checkPermissions())
+    .then(p => console.log('[privychki] native ok: notifications=' + p.display), e => console.log('[privychki] native FAILED: ' + (e && e.message)));
 }
 
 /* ---------- Хранилище и демо-данные ---------- */
@@ -301,10 +960,10 @@ function seed() {
     return h;
   };
   return [
-    make(1, 'Выпить стакан воды', 'health', 'morning', {}, 0.85, 8, true),
-    make(2, 'Утренняя зарядка', 'sport', 'morning', {}, 0.65, 4, false),
-    make(3, 'Чтение 20 минут', 'productivity', 'evening', {}, 0.75, 12, false),
-    make(4, 'Медитация 10 минут', 'mind', 'any', { freq: 'days', days: [1, 3, 5] }, 0.8, 5, false),
+    make(1, L('Выпить стакан воды'), 'health', 'morning', {}, 0.85, 8, true),
+    make(2, L('Утренняя зарядка'), 'sport', 'morning', {}, 0.65, 4, false),
+    make(3, L('Чтение 20 минут'), 'productivity', 'evening', {}, 0.75, 12, false),
+    make(4, L('Медитация 10 минут'), 'mind', 'any', { freq: 'days', days: [1, 3, 5] }, 0.8, 5, false),
   ];
 }
 // Обнуление: привычки остаются, история и баллы начинаются с нуля
@@ -332,7 +991,7 @@ function migrateOld(p) {
 }
 function normalize(p) {
   p = migrateOld(p);
-  const base = { theme: 'auto', meds: [], medLog: {}, alarmsOn: true, ...p };
+  const base = { theme: 'auto', meds: [], medLog: {}, alarmsOn: true, lang: 'ru', sound: 'classic', ...p };
   if (!p.zeroed) { base.habits = resetHistory(p.habits); base.zeroed = true; }
   if (base.medalSeen == null) base.medalSeen = medalFloor(pointsOf(base.habits));
   return base;
@@ -340,9 +999,10 @@ function normalize(p) {
 function load() {
   try {
     const p = LOCAL ? window.SERVER_STATE : JSON.parse(localStorage.getItem(LS_KEY) || 'null');
-    if (p && Array.isArray(p.habits)) return normalize(p);
+    if (p && Array.isArray(p.habits)) { const st = normalize(p); LANG = LANGS[st.lang] ? st.lang : 'ru'; return st; }
   } catch (e) {}
-  return { habits: resetHistory(seed()), theme: 'auto', zeroed: true, meds: [], medLog: {}, alarmsOn: true, medalSeen: 0 };
+  LANG = detectLang();   // первый запуск: язык устройства
+  return { lang: LANG, sound: 'classic', habits: resetHistory(seed()), theme: 'auto', zeroed: true, meds: [], medLog: {}, alarmsOn: true, medalSeen: 0 };
 }
 
 /* ---------- Синхронизация с приложением на компьютере ---------- */
@@ -482,7 +1142,7 @@ function Pill({ active, onClick, children, color }) {
 function ProgressCard({ done, total }) {
   const pct = total ? Math.round(done / total * 100) : 0;
   const all = total > 0 && done === total;
-  const msg = total === 0 ? 'На сегодня ничего не запланировано' : all ? 'Все привычки выполнены — вы молодец!' : done === 0 ? 'Начнём день с маленького шага' : `Отличный темп — осталось ${total - done}`;
+  const msg = total === 0 ? 'На сегодня ничего не запланировано' : all ? 'Все привычки выполнены — вы молодец!' : done === 0 ? 'Начнём день с маленького шага' : L('Отличный темп — осталось {0}', total - done);
   return (
     <section className={`${card} p-5 sm:p-6 fade-up`}>
       <div className="flex items-end justify-between gap-4">
@@ -504,7 +1164,7 @@ function ProgressCard({ done, total }) {
   );
 }
 
-function HabitCard({ item, now, idx, onToggle, onArchive, onDelete }) {
+function HabitCard({ item, now, idx, onToggle, onArchive, onDelete, onEdit }) {
   const { h, done, wc, weekMet } = item;
   const cat = CATS[h.category] || CATS.health;
   const st = streak(h, now);
@@ -528,7 +1188,7 @@ function HabitCard({ item, now, idx, onToggle, onArchive, onDelete }) {
     <div className={`fade-up group relative flex items-center gap-3.5 sm:gap-4 rounded-2xl bg-white dark:bg-zinc-900 p-3.5 sm:p-4 ring-1 ring-black/[.04] dark:ring-white/[.06] shadow-[0_1px_2px_rgba(0,0,0,.03)] transition-all duration-200 ${menu ? 'z-30' : 'hover:-translate-y-0.5 hover:shadow-[0_10px_30px_-12px_rgba(0,0,0,.18)]'} ${weekMet ? 'opacity-70' : ''}`}
       style={{ animationDelay: idx * 40 + 'ms' }}>
       <button ref={btn} onClick={() => onToggle(h.id, btn.current)}
-        aria-label={done ? `Снять отметку: ${h.name}` : `Отметить выполнение: ${h.name}`} aria-pressed={done}
+        aria-label={done ? L('Снять отметку: {0}', h.name) : L('Отметить выполнение: {0}', h.name)} aria-pressed={done}
         className="relative shrink-0 w-12 h-12 rounded-full grid place-items-center transition-all duration-300 active:scale-90 focus:outline-none focus-visible:ring-4 focus-visible:ring-indigo-300/50"
         style={done ? { background: cat.hex, boxShadow: `0 8px 18px -8px ${cat.hex}` } : { boxShadow: `inset 0 0 0 2.5px ${cat.hex}66`, background: `${cat.hex}10` }}>
         <span key={done ? 'd' : 'u'} className={`grid place-items-center ${done ? 'pop' : ''}`}>
@@ -545,12 +1205,13 @@ function HabitCard({ item, now, idx, onToggle, onArchive, onDelete }) {
         <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
           <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium ${cat.chip}`}><Icon name={cat.icon} size={12} stroke={2.4} />{cat.short}</span>
           <span className="text-zinc-400 dark:text-zinc-500">{freqText(h)}{h.freq === 'times' ? ` · ${wc}/${h.times}` : ''}</span>
+          {h.remind && <span className="inline-flex items-center gap-1 text-amber-500 tabular-nums"><Icon name="bell" size={12} />{h.remind}</span>}
           {weekMet && <span className="text-emerald-600 dark:text-emerald-400 font-medium">Цель недели выполнена ✓</span>}
         </div>
         <div className="mt-2 flex gap-1" aria-label="Последние 7 дней">
           {last7.map(d => {
             const k = keyOf(d), did = !!h.history[k], sch = isScheduledOn(h, d) && k >= h.createdAt;
-            return <span key={k} title={`${d.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short' })}: ${did ? 'выполнено' : sch ? 'не выполнено' : 'не по плану'}`}
+            return <span key={k} title={`${d.toLocaleDateString(LOC(), { weekday: 'short', day: 'numeric', month: 'short' })}: ${L(did ? 'выполнено' : sch ? 'не выполнено' : 'не по плану')}`}
               className={`h-1.5 w-4 rounded-full transition-colors ${did ? '' : sch ? 'bg-zinc-200 dark:bg-zinc-700' : 'bg-zinc-100 dark:bg-zinc-800/60'}`}
               style={did ? { background: cat.hex } : undefined} />;
           })}
@@ -558,7 +1219,7 @@ function HabitCard({ item, now, idx, onToggle, onArchive, onDelete }) {
       </div>
 
       <div className="flex flex-col items-end gap-1.5 shrink-0">
-        <div title={`Серия: ${st.n} ${st.unit}`}
+        <div title={L('Серия: {0} {1}', st.n, st.unit)}
           className={`flex items-center gap-1 rounded-full pl-1.5 pr-2.5 py-1 text-sm font-bold tabular-nums ${st.n > 0 ? 'bg-orange-50 text-orange-500 dark:bg-orange-400/10 dark:text-orange-300' : 'text-zinc-300 dark:text-zinc-600'}`}>
           <Icon name="flame" size={16} className={st.n > 0 ? 'flame' : ''} fill={st.n > 0 ? 'currentColor' : 'none'} fillOpacity={0.25} />
           {st.n}<span className="font-medium text-[11px] opacity-70">{h.freq === 'times' ? 'нед' : 'дн'}</span>
@@ -570,7 +1231,10 @@ function HabitCard({ item, now, idx, onToggle, onArchive, onDelete }) {
       </div>
 
       {menu && <>
-        <div ref={menuRef} className="menu-open fade-in absolute right-3 top-[calc(100%-8px)] z-20 w-56 rounded-2xl bg-white dark:bg-zinc-800 p-1.5 shadow-xl ring-1 ring-black/5 dark:ring-white/10">
+        <div ref={menuRef} className="menu-open fade-in absolute end-3 top-[calc(100%-8px)] z-20 w-56 rounded-2xl bg-white dark:bg-zinc-800 p-1.5 shadow-xl ring-1 ring-black/5 dark:ring-white/10">
+          <button onClick={() => { closeMenu(); onEdit(h); }} className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 transition">
+            <Icon name="pencil" size={17} className="text-zinc-500" />Изменить
+          </button>
           <button onClick={() => { closeMenu(); onArchive(h.id); }} className="w-full flex items-center gap-2.5 rounded-xl px-3 py-2.5 text-sm hover:bg-zinc-100 dark:hover:bg-zinc-700 transition">
             <Icon name="archive" size={17} className="text-zinc-500" />В архив
           </button>
@@ -585,7 +1249,7 @@ function HabitCard({ item, now, idx, onToggle, onArchive, onDelete }) {
   );
 }
 
-function TodayView({ habits, now, onToggle, onArchive, onDelete, onAdd }) {
+function TodayView({ habits, now, onToggle, onArchive, onDelete, onEdit, onAdd }) {
   const items = todayItems(habits, now);
   const { done, total } = dayProgress(items);
   const offToday = habits.filter(h => !h.archived && h.freq === 'days' && !h.days.includes(now.getDay()));
@@ -614,7 +1278,7 @@ function TodayView({ habits, now, onToggle, onArchive, onDelete, onAdd }) {
               <span className="text-xs font-medium text-zinc-400 tabular-nums">{gd}/{group.length}</span>
             </div>
             <div className="space-y-2.5">
-              {group.map(x => <HabitCard key={x.h.id} item={x} now={now} idx={idx++} onToggle={onToggle} onArchive={onArchive} onDelete={onDelete} />)}
+              {group.map(x => <HabitCard key={x.h.id} item={x} now={now} idx={idx++} onToggle={onToggle} onArchive={onArchive} onDelete={onDelete} onEdit={onEdit} />)}
             </div>
           </section>
         );
@@ -656,13 +1320,13 @@ function StatsView({ habits, now }) {
     const r = ratio(d); if (r != null && i > 0) { sum += r; cnt++; }
   }
   const avg = cnt ? Math.round(sum / cnt * 100) : 0;
-  let best = { n: 0, name: '—', unit: 'дней' };
+  let best = { n: 0, name: '—', unit: plural(0, ['день', 'дня', 'дней']) };
   for (const h of active) { const s = streak(h, now); if (s.n > best.n) best = { ...s, name: h.name }; }
 
   const stats = [
     { label: 'Баллы · 1 день = 1 балл', value: pointsOf(habits), icon: 'star', color: 'text-amber-500 bg-amber-50 dark:bg-amber-400/10' },
     { label: 'Средний уровень', value: avg + '%', icon: 'target', color: 'text-indigo-500 bg-indigo-50 dark:bg-indigo-400/10' },
-    { label: `Лучшая серия · ${best.name}`, value: `${best.n} ${best.unit}`, icon: 'flame', color: 'text-orange-500 bg-orange-50 dark:bg-orange-400/10' },
+    { label: L('Лучшая серия · {0}', best.name), value: `${best.n} ${best.unit}`, icon: 'flame', color: 'text-orange-500 bg-orange-50 dark:bg-orange-400/10' },
   ];
 
   return (
@@ -693,7 +1357,7 @@ function StatsView({ habits, now }) {
               <div className="flex gap-[4px] h-5 text-[10px] text-zinc-400">
                 {cols.map((c, i) => {
                   const show = i === 0 || c[0].getMonth() !== cols[i - 1][0].getMonth();
-                  return <div key={i} className="w-[15px] whitespace-nowrap overflow-visible">{show ? c[0].toLocaleDateString('ru-RU', { month: 'short' }).replace('.', '') : ''}</div>;
+                  return <div key={i} className="w-[15px] whitespace-nowrap overflow-visible">{show ? c[0].toLocaleDateString(LOC(), { month: 'short' }).replace('.', '') : ''}</div>;
                 })}
               </div>
               <div className="flex gap-[4px]">
@@ -703,7 +1367,7 @@ function StatsView({ habits, now }) {
                       const k = keyOf(d);
                       if (k > todayK) return <div key={k} className="w-[15px] h-[15px]" />;
                       const r = ratio(d);
-                      return <div key={k} title={`${d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}: ${r == null ? 'нет привычек' : Math.round(r * 100) + '%'}`}
+                      return <div key={k} title={`${d.toLocaleDateString(LOC(), { day: 'numeric', month: 'long' })}: ${r == null ? L('нет привычек') : Math.round(r * 100) + '%'}`}
                         className={`w-[15px] h-[15px] rounded-[4px] transition-transform hover:scale-125 ${HEAT[level(r)]} ${k === todayK ? 'ring-2 ring-indigo-400 ring-offset-1 ring-offset-white dark:ring-offset-zinc-900' : ''}`} />;
                     })}
                   </div>
@@ -737,7 +1401,7 @@ function StatsView({ habits, now }) {
                 <div className="mt-2 grid gap-[3px]" style={{ gridTemplateColumns: 'repeat(30, minmax(0, 1fr))' }}>
                   {days.map(d => {
                     const k = keyOf(d), did = !!h.history[k], before = k < h.createdAt, sch = isScheduledOn(h, d);
-                    return <div key={k} title={d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                    return <div key={k} title={d.toLocaleDateString(LOC(), { day: 'numeric', month: 'short' })}
                       className={`aspect-square rounded-[3px] ${did ? '' : before ? 'bg-transparent' : sch ? 'bg-zinc-200 dark:bg-zinc-700' : 'bg-zinc-100 dark:bg-zinc-800'}`}
                       style={did ? { background: cat.hex } : undefined} />;
                   })}
@@ -799,7 +1463,7 @@ function MedalsView({ habits }) {
             </p>
             <p className="mt-1 text-xs text-zinc-400">1 день с выполненной привычкой = 1 балл</p>
           </div>
-          <div className="text-right">
+          <div className="text-end">
             <div className="text-2xl font-bold tabular-nums">{unlockedCount}<span className="text-zinc-400 text-base font-semibold">/{MEDALS.length}</span></div>
             <div className="text-xs text-zinc-400">медалей</div>
           </div>
@@ -831,9 +1495,9 @@ function MedalsView({ habits }) {
                 const on = m <= pts;
                 return (
                   <div key={m} className={`fade-up relative flex flex-col items-center rounded-2xl bg-white dark:bg-zinc-900 ring-1 ring-black/[.04] dark:ring-white/[.06] px-2 pt-3 pb-3 transition hover:-translate-y-0.5 ${on ? 'hover:shadow-[0_10px_30px_-12px_rgba(0,0,0,.2)]' : ''}`}
-                    style={{ animationDelay: i * 30 + 'ms' }} title={on ? `Получена: вы продержались ${m} ${daysWord(m)}` : `Откроется через ${m - pts} ${daysWord(m - pts)}`}>
+                    style={{ animationDelay: i * 30 + 'ms' }} title={on ? L('Получена: вы продержались {0} {1}', m, daysWord(m)) : L('Откроется через {0} {1}', m - pts, daysWord(m - pts))}>
                     <Medal n={m} unlocked={on} size={64} />
-                    {!on && <span className="absolute top-2 right-2 text-zinc-300 dark:text-zinc-600"><Icon name="lock" size={14} /></span>}
+                    {!on && <span className="absolute top-2 end-2 text-zinc-300 dark:text-zinc-600"><Icon name="lock" size={14} /></span>}
                     <div className={`mt-1.5 text-[11px] font-semibold leading-tight text-center ${on ? '' : 'text-zinc-400 dark:text-zinc-500'}`}>Вы продержались</div>
                     <div className={`text-[11px] tabular-nums ${on ? 'text-zinc-500 dark:text-zinc-400' : 'text-zinc-300 dark:text-zinc-600'}`}>{m} {daysWord(m)}</div>
                   </div>
@@ -847,18 +1511,303 @@ function MedalsView({ habits }) {
   );
 }
 
+const LBL = 'block text-xs font-semibold uppercase tracking-wide text-zinc-400 mb-2';
+const FIELD = 'w-full rounded-2xl bg-zinc-100 dark:bg-zinc-800 px-4 py-3 text-[16px] outline-none ring-2 ring-transparent focus:ring-indigo-300 dark:focus:ring-indigo-500/60 transition placeholder:text-zinc-400';
+
+/* ---------- Выбор мелодии ---------- */
+function SoundPicker({ value, onChange, allowDefault }) {
+  const [name, setName] = useState(() => { try { return localStorage.getItem(MELODY_KEY) || ''; } catch (e) { return ''; } });
+  const [err, setErr] = useState('');
+  const file = useRef(null);
+  const pick = async e => {
+    const f = e.target.files[0]; e.target.value = '';
+    if (!f) return;
+    if (f.size > 30 * 1024 * 1024) return setErr('Файл слишком большой — выберите до 30 МБ');
+    try {
+      await sound.setCustom(f);
+      try { localStorage.setItem(MELODY_KEY, f.name); } catch (x) {}
+      setName(f.name); setErr(''); onChange('custom');
+      sound.start('custom', { once: true });
+    } catch (x) { setErr('Не удалось сохранить мелодию'); }
+  };
+  return (
+    <div>
+      <div className="flex items-center gap-2">
+        <select value={value || ''} onChange={e => { setErr(''); sound.stop(); onChange(e.target.value); }} aria-label="Мелодия" className={`${FIELD} min-w-0 flex-1 appearance-none`}>
+          {allowDefault && <option value="">По умолчанию</option>}
+          {TONES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+          <option value="custom">Своя мелодия</option>
+        </select>
+        <button type="button" onClick={() => sound.playing() ? sound.stop() : sound.start(value || DEFAULT_SOUND, { once: true })} aria-label="Прослушать"
+          className="w-12 h-12 shrink-0 rounded-full grid place-items-center bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition active:scale-90">
+          <Icon name="play" size={18} />
+        </button>
+      </div>
+      {value === 'custom' && (
+        <div className="mt-2 fade-in">
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={() => file.current.click()} className="shrink-0 inline-flex items-center gap-2 rounded-full bg-violet-500 hover:bg-violet-600 text-white px-4 py-2 text-sm font-semibold transition active:scale-95">
+              <Icon name="music" size={16} />{name ? 'Заменить файл' : 'Выбрать файл'}
+            </button>
+            <span className="min-w-0 truncate text-sm text-zinc-500 dark:text-zinc-400" dir="auto">{name || 'Файл не выбран'}</span>
+          </div>
+          <input ref={file} type="file" accept="audio/*" onChange={pick} className="hidden" data-melody-file />
+          {notify.available && <p className="mt-2 text-xs text-zinc-400 leading-relaxed">Своя мелодия играет, когда приложение открыто. Если оно закрыто, уведомление приходит со стандартным звуком телефона.</p>}
+        </div>
+      )}
+      {err && <p className="mt-2 text-sm text-rose-500 fade-in">{err}</p>}
+    </div>
+  );
+}
+
+/* ---------- Код и рисунок ---------- */
+function PinPad({ value, onChange, max = 8, disabled }) {
+  const press = k => { if (disabled) return; if (k === 'del') onChange(value.slice(0, -1)); else if (value.length < max) onChange(value + k); };
+  const key = 'h-16 rounded-full text-2xl font-semibold bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 active:scale-90 transition grid place-items-center disabled:opacity-40';
+  return (
+    <div dir="ltr">
+      <div className="flex justify-center gap-3 h-4" aria-hidden="true">
+        {[...Array(Math.max(4, value.length))].map((_, i) => <span key={i} className={`w-3.5 h-3.5 rounded-full transition ${i < value.length ? 'bg-indigo-500 scale-110' : 'bg-zinc-200 dark:bg-zinc-700'}`} />)}
+      </div>
+      <div className="mt-6 mx-auto grid grid-cols-3 gap-3 w-64">
+        {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map(k => <button type="button" key={k} data-key={k} disabled={disabled} onClick={() => press(k)} className={key}>{k}</button>)}
+        <span />
+        <button type="button" data-key="0" disabled={disabled} onClick={() => press('0')} className={key}>0</button>
+        <button type="button" data-key="del" disabled={disabled} onClick={() => press('del')} aria-label="Стереть" className={`${key} !bg-transparent text-zinc-500`}><Icon name="backspace" size={24} /></button>
+      </div>
+    </div>
+  );
+}
+function PatternPad({ onDone, disabled }) {
+  const [path, setPath] = useState([]);
+  const [cur, setCur] = useState(null);
+  const box = useRef(null), drawing = useRef(false), pathRef = useRef([]);
+  const S = 264, P = [44, 132, 220];
+  const pos = i => [P[i % 3], P[Math.floor(i / 3)]];
+  const hit = e => {
+    const r = box.current.getBoundingClientRect();
+    const x = (e.clientX - r.left) * S / r.width, y = (e.clientY - r.top) * S / r.height;
+    setCur([x, y]);
+    for (let i = 0; i < 9; i++) {
+      const [px, py] = pos(i);
+      if (Math.hypot(x - px, y - py) < 32 && !pathRef.current.includes(i)) { pathRef.current = [...pathRef.current, i]; setPath(pathRef.current); }
+    }
+  };
+  const down = e => {
+    if (disabled) return;
+    e.preventDefault(); drawing.current = true; pathRef.current = []; setPath([]);
+    try { box.current.setPointerCapture(e.pointerId); } catch (x) {}
+    hit(e);
+  };
+  const move = e => { if (drawing.current) hit(e); };
+  const up = () => {
+    if (!drawing.current) return;
+    drawing.current = false; setCur(null);
+    const p = pathRef.current;
+    setTimeout(() => { if (!drawing.current) { pathRef.current = []; setPath([]); } }, 300);
+    if (p.length) onDone(p.join(''));
+  };
+  const pts = path.map(pos);
+  return (
+    <svg ref={box} viewBox={`0 0 ${S} ${S}`} role="img" aria-label="Поле для рисунка" data-pattern
+      onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
+      className={`mx-auto w-64 h-64 select-none ${disabled ? 'opacity-40' : 'cursor-pointer'}`} style={{ touchAction: 'none' }}>
+      <polyline points={[...pts, ...(cur && pts.length ? [cur] : [])].map(p => p.join(',')).join(' ')} fill="none" stroke="#6366f1" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" strokeOpacity=".7" />
+      {[...Array(9)].map((_, i) => {
+        const [x, y] = pos(i), on = path.includes(i);
+        return <g key={i}>
+          <circle cx={x} cy={y} r="26" fill={on ? '#6366f1' : 'currentColor'} fillOpacity={on ? .18 : .06} />
+          <circle cx={x} cy={y} r={on ? 10 : 7} fill={on ? '#6366f1' : 'currentColor'} fillOpacity={on ? 1 : .35} />
+        </g>;
+      })}
+    </svg>
+  );
+}
+function LockSetup({ type, bioOn, onClose, onSave }) {
+  const [first, setFirst] = useState(null);
+  const [pin, setPin] = useState('');
+  const [err, setErr] = useState('');
+  useEffect(() => {
+    const k = e => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k);
+  }, []);
+  const take = secret => {
+    if (secret.length < 4) return setErr(type === 'pin' ? 'От 4 до 8 цифр' : 'Соедините не меньше 4 точек');
+    if (first == null) { setFirst(secret); setPin(''); setErr(''); return; }
+    if (secret !== first) { setFirst(null); setPin(''); return setErr(type === 'pin' ? 'Коды не совпали — попробуйте ещё раз' : 'Рисунки не совпали — попробуйте ещё раз'); }
+    onSave(makeLock(type, secret, bioOn));
+  };
+  const title = type === 'pin' ? (first == null ? 'Придумайте код' : 'Повторите код') : (first == null ? 'Нарисуйте рисунок' : 'Повторите рисунок');
+  return (
+    <div className="fixed inset-0 z-[75] flex items-end sm:items-center justify-center">
+      <div className="fade-in absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div role="dialog" aria-modal="true" aria-label="Защита входа" data-lock-setup
+        className="sheet-in relative w-full sm:max-w-sm rounded-t-[28px] sm:rounded-[28px] bg-white dark:bg-zinc-900 p-6 shadow-2xl" style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}>
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="text-xl font-bold tracking-tight">{title}</h2>
+          <button type="button" onClick={onClose} aria-label="Закрыть" className="w-9 h-9 shrink-0 rounded-full grid place-items-center bg-zinc-100 dark:bg-zinc-800 text-zinc-500 transition"><Icon name="x" size={18} /></button>
+        </div>
+        <p className={`mt-1 mb-5 text-sm min-h-[1.25rem] ${err ? 'text-rose-500' : 'text-zinc-500 dark:text-zinc-400'}`}>{err || (type === 'pin' ? 'От 4 до 8 цифр' : 'Соедините не меньше 4 точек')}</p>
+        {type === 'pin'
+          ? <>
+              <PinPad value={pin} onChange={v => { setErr(''); setPin(v); }} />
+              <button type="button" disabled={pin.length < 4} onClick={() => take(pin)} className="mt-6 w-full rounded-2xl bg-indigo-500 hover:bg-indigo-600 disabled:opacity-40 text-white py-3.5 font-semibold transition">{first == null ? 'Далее' : 'Сохранить'}</button>
+            </>
+          : <PatternPad onDone={take} />}
+      </div>
+    </div>
+  );
+}
+function LockScreen({ cfg, onUnlock, alarm }) {
+  const [pin, setPin] = useState('');
+  const [err, setErr] = useState('');
+  const [fails, setFails] = useState(0);
+  const [wait, setWait] = useState(0);
+  const [reset, setReset] = useState(false);
+  const [bioOk, setBioOk] = useState(false);
+  const tryBio = async () => { if (await bio.verify()) onUnlock(); };
+  useEffect(() => {
+    if (!cfg.bio) return;
+    let live = true;
+    bio.check().then(r => { if (live && r.ok) { setBioOk(true); tryBio(); } });
+    return () => { live = false; };
+  }, []);
+  useEffect(() => {
+    if (wait <= 0) return;
+    const i = setTimeout(() => setWait(w => w - 1), 1000);
+    return () => clearTimeout(i);
+  }, [wait]);
+  const check = secret => {
+    if (wait > 0) return;
+    if (lockHash(cfg.salt, secret) === cfg.hash) return onUnlock();
+    const f = fails + 1;
+    setFails(f); setPin(''); setErr(cfg.type === 'pin' ? 'Неверный код' : 'Неверный рисунок');
+    if (f % 5 === 0) setWait(30);
+  };
+  const onPin = v => { setErr(''); setPin(v); if (v.length >= cfg.len) check(v); };
+  const wipe = () => {
+    try { [LS_KEY, LOCK_KEY, MELODY_KEY].forEach(k => localStorage.removeItem(k)); } catch (e) {}
+    location.reload();
+  };
+  return (
+    <div className="fixed inset-0 z-[80] overflow-y-auto bg-[#f5f5f7] dark:bg-black" data-lock-screen>
+      <div className="min-h-full flex flex-col items-center justify-center px-6 py-10">
+        <div className="w-14 h-14 rounded-2xl grid place-items-center bg-indigo-500 text-white shadow-[0_12px_28px_-8px_rgba(99,102,241,.9)]"><Icon name="lock" size={26} /></div>
+        <h1 className="mt-4 text-2xl font-extrabold tracking-tight">Привычки</h1>
+        <p className={`mt-1 mb-7 text-sm min-h-[1.25rem] text-center ${err || wait > 0 ? 'text-rose-500' : 'text-zinc-500 dark:text-zinc-400'}`}>
+          {wait > 0 ? L('Слишком много попыток. Подождите {0} с', wait) : err || (cfg.type === 'pin' ? 'Введите код' : 'Нарисуйте рисунок для входа')}
+        </p>
+        {alarm && <p className="-mt-4 mb-6 flex items-center gap-1.5 text-sm font-semibold text-amber-500"><Icon name="alarm" size={16} />Сработал будильник</p>}
+        {cfg.type === 'pin' ? <PinPad value={pin} onChange={onPin} max={cfg.len} disabled={wait > 0} /> : <PatternPad onDone={check} disabled={wait > 0} />}
+        {bioOk && <button type="button" onClick={tryBio} className="mt-7 inline-flex items-center gap-2 rounded-full bg-white dark:bg-zinc-900 ring-1 ring-black/5 dark:ring-white/10 px-5 py-2.5 text-sm font-semibold transition active:scale-95"><Icon name="shield" size={17} className="text-indigo-500" />Войти по биометрии</button>}
+        {!reset
+          ? <button type="button" onClick={() => setReset(true)} className="mt-7 text-xs text-zinc-400 underline underline-offset-2">Забыли код?</button>
+          : <div className="mt-7 w-full max-w-xs rounded-2xl bg-white dark:bg-zinc-900 ring-1 ring-rose-200 dark:ring-rose-500/30 p-4 text-center fade-in">
+              <p className="text-sm text-zinc-600 dark:text-zinc-300 leading-relaxed">Сбросить приложение? Все привычки, отметки и лекарства на этом устройстве будут удалены.</p>
+              <button type="button" onClick={wipe} className="mt-3 w-full rounded-xl bg-rose-500 hover:bg-rose-600 text-white py-2.5 text-sm font-semibold transition">Сбросить и удалить данные</button>
+              <button type="button" onClick={() => setReset(false)} className="mt-1 w-full rounded-xl py-2.5 text-sm font-semibold text-zinc-500">Отмена</button>
+            </div>}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Настройки: язык, тема, будильники, защита ---------- */
+function SettingsSheet({ state, setState, lock, onLock, onClose, onPrivacy }) {
+  const [setup, setSetup] = useState(null);
+  const [bioInfo, setBioInfo] = useState({ ok: false });
+  const setupRef = useRef(null); setupRef.current = setup;
+  useEffect(() => {
+    bio.check().then(setBioInfo);
+    const k = e => { if (e.key === 'Escape' && !setupRef.current) onClose(); };
+    window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k);
+  }, []);
+  const alarmsOn = state.alarmsOn !== false;
+  const seg = on => `flex-1 min-w-0 inline-flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-medium transition ${on ? 'bg-white dark:bg-zinc-700 shadow-sm text-zinc-900 dark:text-white' : 'text-zinc-500'}`;
+  const toggleBio = async v => { if (v && !(await bio.verify())) return; onLock({ ...lock, bio: v }); };
+  return (
+    <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center">
+      <div className="fade-in absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div role="dialog" aria-modal="true" aria-label="Настройки"
+        className="sheet-in relative w-full sm:max-w-md max-h-[92vh] overflow-y-auto rounded-t-[28px] sm:rounded-[28px] bg-white dark:bg-zinc-900 p-6 shadow-2xl" style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}>
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="text-xl font-bold tracking-tight">Настройки</h2>
+          <button type="button" onClick={onClose} aria-label="Закрыть" className="w-9 h-9 shrink-0 rounded-full grid place-items-center bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition"><Icon name="x" size={18} /></button>
+        </div>
+
+        <div className="mt-5">
+          <span className={LBL}>Язык</span>
+          <div className="flex gap-1 rounded-2xl bg-zinc-100 dark:bg-zinc-800 p-1" data-langs>
+            {Object.keys(LANGS).map(k => <button type="button" key={k} data-lang={k} aria-pressed={LANG === k} onClick={() => setState(s => ({ ...s, lang: k }))} className={seg(LANG === k)}><span>{LANGS[k].name}</span></button>)}
+          </div>
+        </div>
+
+        <div className="mt-5">
+          <span className={LBL}>Тема</span>
+          <div className="flex gap-1 rounded-2xl bg-zinc-100 dark:bg-zinc-800 p-1">
+            {[['auto', 'Авто', 'monitor'], ['light', 'Светлая', 'sun'], ['dark', 'Тёмная', 'moon']].map(([k, l, ic]) => (
+              <button type="button" key={k} data-theme={k} aria-pressed={state.theme === k} onClick={() => setState(s => ({ ...s, theme: k }))} className={seg(state.theme === k)}><Icon name={ic} size={16} />{l}</button>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-5">
+          <span className={LBL}>Будильники</span>
+          <div className="flex items-center justify-between gap-3 rounded-2xl bg-zinc-100 dark:bg-zinc-800 px-4 py-3">
+            <span className="min-w-0">
+              <span className="flex items-center gap-2 text-sm font-medium"><Icon name={alarmsOn ? 'bell' : 'bellOff'} size={18} className="text-amber-500" />Все будильники</span>
+              <span className="block text-xs text-zinc-500 dark:text-zinc-400">Привычки и лекарства</span>
+            </span>
+            <Switch on={alarmsOn} onChange={v => { sound.unlock(); setState(s => ({ ...s, alarmsOn: v })); }} label="Все будильники" />
+          </div>
+          <div className="mt-3">
+            <span className="block text-sm font-medium mb-2">Мелодия по умолчанию</span>
+            <SoundPicker value={state.sound || 'classic'} onChange={v => setState(s => ({ ...s, sound: v }))} />
+          </div>
+        </div>
+
+        <div className="mt-5">
+          <span className={LBL}>Защита входа</span>
+          {LOCAL
+            ? <p className="text-sm text-zinc-500 dark:text-zinc-400">Защита входа доступна в приложении для телефона.</p>
+            : <>
+                <div className="flex items-center gap-2 text-sm font-medium" data-lock-status><Icon name={lock ? 'lock' : 'shield'} size={18} className={lock ? 'text-emerald-500' : 'text-zinc-400'} />
+                  <span>{!lock ? 'Выключена' : lock.type === 'pin' ? 'Включена: код' : 'Включена: рисунок'}</span>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" onClick={() => setSetup('pin')} className="rounded-full bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 px-4 py-2 text-sm font-semibold transition active:scale-95">Код</button>
+                  <button type="button" onClick={() => setSetup('pattern')} className="rounded-full bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 px-4 py-2 text-sm font-semibold transition active:scale-95">Рисунок</button>
+                  {lock && <button type="button" onClick={() => onLock(null)} className="rounded-full px-4 py-2 text-sm font-semibold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition">Выключить защиту</button>}
+                </div>
+                {lock && bioInfo.ok && (
+                  <div className="mt-3 flex items-center justify-between gap-3 rounded-2xl bg-zinc-100 dark:bg-zinc-800 px-4 py-3">
+                    <span className="text-sm font-medium">{bioLabel(bioInfo.type)}</span>
+                    <Switch on={!!lock.bio} onChange={toggleBio} label={bioLabel(bioInfo.type)} />
+                  </div>
+                )}
+                <p className="mt-3 text-xs text-zinc-400 leading-relaxed">Защита закрывает вход в приложение на этом устройстве. Данные не шифруются.</p>
+              </>}
+        </div>
+
+        <button type="button" onClick={onPrivacy} className="mt-6 text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 underline underline-offset-2">Политика конфиденциальности</button>
+      </div>
+      {setup && <LockSetup type={setup} bioOn={lock && lock.bio} onClose={() => setSetup(null)} onSave={cfg => { onLock(cfg); setSetup(null); }} />}
+    </div>
+  );
+}
+
 function Switch({ on, onChange, label }) {
   return (
-    <button type="button" role="switch" aria-checked={on} aria-label={label} onClick={() => onChange(!on)}
+    <button type="button" dir="ltr" role="switch" aria-checked={on} aria-label={label} onClick={() => onChange(!on)}
       className={`relative shrink-0 w-12 h-7 rounded-full transition-colors ${on ? 'bg-emerald-400' : 'bg-zinc-300 dark:bg-zinc-700'}`}>
       <span className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform duration-200 ${on ? 'translate-x-5' : ''}`} />
     </button>
   );
 }
 
-function ExactAlarmCard({ meds, alarmsOn, onGranted }) {
+function ExactAlarmCard({ hasAlarms, alarmsOn, onGranted }) {
   const [ok, setOk] = useState(true);
-  const need = notify.available && alarmsOn && meds.some(m => m.alarm);
+  const need = notify.available && alarmsOn && hasAlarms;
   useEffect(() => {
     if (!need) return;
     const check = () => notify.exactOk().then(setOk);
@@ -873,7 +1822,7 @@ function ExactAlarmCard({ meds, alarmsOn, onGranted }) {
         <div className="w-10 h-10 rounded-xl grid place-items-center shrink-0 bg-amber-50 text-amber-500 dark:bg-amber-400/10"><Icon name="alarm" size={20} /></div>
         <div className="min-w-0 flex-1">
           <div className="font-semibold">Напоминания могут опаздывать</div>
-          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">Чтобы уведомление о лекарстве приходило ровно в назначенное время, разрешите приложению «Будильники и напоминания».</p>
+          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">Чтобы уведомление приходило ровно в назначенное время, разрешите приложению «Будильники и напоминания».</p>
           <button onClick={async () => { const g = await notify.askExact(); setOk(g); if (g) onGranted(); }}
             className="mt-3 inline-flex items-center gap-2 rounded-full bg-amber-500 hover:bg-amber-600 text-white px-4 py-2 text-sm font-semibold transition active:scale-95">Разрешить точные напоминания</button>
         </div>
@@ -882,7 +1831,7 @@ function ExactAlarmCard({ meds, alarmsOn, onGranted }) {
   );
 }
 
-function PillsView({ meds, medLog, now, alarmsOn, onToggleAlarms, onTake, onAdd, onEdit, onExactGranted }) {
+function PillsView({ meds, medLog, now, alarmsOn, soundId, hasAlarms, onSound, onToggleAlarms, onTake, onAdd, onEdit, onExactGranted }) {
   const k = keyOf(now), hm = hmOf(now), log = medLog[k] || {};
   const [tested, setTested] = useState(null);
   const doses = meds.filter(m => medToday(m, now))
@@ -923,7 +1872,7 @@ function PillsView({ meds, medLog, now, alarmsOn, onToggleAlarms, onTake, onAdd,
         </p>
       </section>
 
-      <ExactAlarmCard meds={meds} alarmsOn={alarmsOn} onGranted={onExactGranted} />
+      <ExactAlarmCard hasAlarms={hasAlarms} alarmsOn={alarmsOn} onGranted={onExactGranted} />
 
       <section className={`${card} p-5 fade-up`}>
         <div className="flex items-center gap-3">
@@ -932,7 +1881,7 @@ function PillsView({ meds, medLog, now, alarmsOn, onToggleAlarms, onTake, onAdd,
           </div>
           <div className="min-w-0 flex-1">
             <div className="font-semibold">Будильник</div>
-            <div className="text-xs text-zinc-500 dark:text-zinc-400">{alarmsOn ? 'Звонит в назначенное время' : 'Выключен для всех лекарств'}</div>
+            <div className="text-xs text-zinc-500 dark:text-zinc-400">{alarmsOn ? 'Звонит в назначенное время' : 'Выключен для привычек и лекарств'}</div>
           </div>
           <Switch on={alarmsOn} onChange={onToggleAlarms} label="Будильник" />
         </div>
@@ -942,6 +1891,10 @@ function PillsView({ meds, medLog, now, alarmsOn, onToggleAlarms, onTake, onAdd,
           </button>
           {tested === 'ok' && <span className="text-xs text-emerald-600 dark:text-emerald-400">Звук работает ✓</span>}
           {tested === 'fail' && <span className="text-xs text-rose-500">Браузер не дал включить звук — проверьте беззвучный режим</span>}
+        </div>
+        <div className="mt-4">
+          <span className={LBL}>Мелодия</span>
+          <SoundPicker value={soundId} onChange={onSound} />
         </div>
         <p className="mt-3 text-xs text-zinc-400 leading-relaxed">{notify.available
           ? 'Напоминания приходят уведомлением, даже если приложение закрыто и телефон заблокирован.'
@@ -993,11 +1946,11 @@ function PillsView({ meds, medLog, now, alarmsOn, onToggleAlarms, onTake, onAdd,
         </div>
         <div className="space-y-2.5">
           {meds.map(m => (
-            <button key={m.id} onClick={() => onEdit(m)} className="w-full text-left flex items-center gap-3 rounded-2xl bg-white dark:bg-zinc-900 p-3.5 ring-1 ring-black/[.04] dark:ring-white/[.06] hover:-translate-y-0.5 transition">
+            <button key={m.id} onClick={() => onEdit(m)} className="w-full text-start flex items-center gap-3 rounded-2xl bg-white dark:bg-zinc-900 p-3.5 ring-1 ring-black/[.04] dark:ring-white/[.06] hover:-translate-y-0.5 transition">
               <div className="w-10 h-10 rounded-full grid place-items-center shrink-0" style={{ background: m.color + '22', color: m.color }}><Icon name="pill" size={18} /></div>
               <div className="min-w-0 flex-1">
                 <div className="font-semibold truncate">{m.name}</div>
-                <div className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{m.dose} · {m.times.join(', ')} · {m.days && m.days.length ? WD_ORDER.filter(x => m.days.includes(x)).map(x => WD[x]).join(', ') : 'каждый день'}</div>
+                <div className="text-xs text-zinc-500 dark:text-zinc-400 truncate">{m.dose} · {m.times.join(', ')} · {m.days && m.days.length ? WD_ORDER.filter(x => m.days.includes(x)).map(x => L(WD[x])).join(', ') : 'каждый день'}</div>
               </div>
               <Icon name={m.alarm ? 'bell' : 'bellOff'} size={16} className={m.alarm ? 'text-amber-400' : 'text-zinc-300 dark:text-zinc-600'} />
               <Icon name="pencil" size={16} className="text-zinc-400" />
@@ -1011,12 +1964,13 @@ function PillsView({ meds, medLog, now, alarmsOn, onToggleAlarms, onTake, onAdd,
 
 function MedSheet({ initial, onClose, onSave, onDelete }) {
   const [name, setName] = useState(initial ? initial.name : '');
-  const [dose, setDose] = useState(initial ? initial.dose : '1 таблетка');
+  const [dose, setDose] = useState(initial ? initial.dose : L('1 таблетка'));
   const [note, setNote] = useState(initial ? initial.note || '' : '');
   const [times, setTimes] = useState(initial ? initial.times : ['08:00']);
   const [every, setEvery] = useState(!initial || !initial.days || !initial.days.length);
   const [days, setDays] = useState(initial && initial.days && initial.days.length ? initial.days : [1, 2, 3, 4, 5]);
   const [alarm, setAlarm] = useState(initial ? initial.alarm : true);
+  const [snd, setSnd] = useState(initial ? initial.sound || '' : '');
   const [color, setColor] = useState(initial ? initial.color : PALETTE[3]);
   const [err, setErr] = useState('');
   const [confirmDel, setConfirmDel] = useState(false);
@@ -1031,7 +1985,7 @@ function MedSheet({ initial, onClose, onSave, onDelete }) {
     if (!ts.length) return setErr('Добавьте хотя бы одно время приёма');
     if (!every && !days.length) return setErr('Выберите дни недели');
     sound.unlock();
-    onSave({ ...(initial || {}), name: name.trim().slice(0, 60), dose: dose.trim() || '1 таблетка', note: note.trim().slice(0, 80), times: ts, days: every ? [] : days, alarm, color });
+    onSave({ ...(initial || {}), name: name.trim().slice(0, 60), dose: dose.trim() || L('1 таблетка'), note: note.trim().slice(0, 80), times: ts, days: every ? [] : days, alarm, sound: snd, color });
   };
   const label = 'block text-xs font-semibold uppercase tracking-wide text-zinc-400 mb-2';
   const field = 'w-full rounded-2xl bg-zinc-100 dark:bg-zinc-800 px-4 py-3 text-[16px] outline-none ring-2 ring-transparent focus:ring-violet-300 dark:focus:ring-violet-500/60 transition placeholder:text-zinc-400';
@@ -1066,7 +2020,7 @@ function MedSheet({ initial, onClose, onSave, onDelete }) {
           <div className="space-y-2">
             {times.map((t, i) => (
               <div key={i} className="flex items-center gap-2">
-                <input type="time" value={t} onChange={e => { const v = e.target.value; setTimes(s => s.map((x, j) => j === i ? v : x)); setErr(''); }} className={`${field} tabular-nums`} aria-label={`Время ${i + 1}`} />
+                <input type="time" value={t} onChange={e => { const v = e.target.value; setTimes(s => s.map((x, j) => j === i ? v : x)); setErr(''); }} className={`${field} tabular-nums`} aria-label={L('Время {0}', i + 1)} />
                 {times.length > 1 && <button type="button" onClick={() => setTimes(s => s.filter((_, j) => j !== i))} aria-label="Убрать время" className="w-11 h-11 shrink-0 rounded-full grid place-items-center bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-rose-500 transition"><Icon name="x" size={18} /></button>}
               </div>
             ))}
@@ -1097,12 +2051,13 @@ function MedSheet({ initial, onClose, onSave, onDelete }) {
           <span className="flex items-center gap-2 text-sm font-medium"><Icon name="alarm" size={18} className="text-amber-500" />Будильник</span>
           <Switch on={alarm} onChange={setAlarm} label="Будильник для этого лекарства" />
         </div>
+        {alarm && <div className="mt-3 fade-in"><span className={label}>Мелодия</span><SoundPicker value={snd} onChange={setSnd} allowDefault /></div>}
 
         <div className="mt-5">
           <span className={label}>Цвет</span>
           <div className="flex gap-2.5">
             {PALETTE.map(c => (
-              <button type="button" key={c} onClick={() => setColor(c)} aria-label={`Цвет ${c}`}
+              <button type="button" key={c} onClick={() => setColor(c)} aria-label={L('Цвет {0}', c)}
                 className={`w-9 h-9 rounded-full transition ${color === c ? 'ring-4 ring-offset-2 ring-offset-white dark:ring-offset-zinc-900' : ''}`} style={{ background: c, '--tw-ring-color': c + '66' }} />
             ))}
           </div>
@@ -1124,25 +2079,26 @@ function MedSheet({ initial, onClose, onSave, onDelete }) {
 }
 
 function AlarmModal({ items, onTake, onSnooze, onStop }) {
+  const meds = items.every(x => x.kind === 'med');
   return (
     <div className="fixed inset-0 z-[65] flex items-center justify-center p-5">
       <div className="fade-in absolute inset-0 bg-black/50 backdrop-blur-sm" />
-      <div role="alertdialog" aria-modal="true" aria-label="Пора принять лекарство" className="sheet-in relative w-full max-w-sm rounded-[28px] bg-white dark:bg-zinc-900 p-6 shadow-2xl">
+      <div role="alertdialog" aria-modal="true" aria-label={meds ? 'Пора принять лекарство' : 'Напоминание'} className="sheet-in relative w-full max-w-sm max-h-[90vh] overflow-y-auto rounded-[28px] bg-white dark:bg-zinc-900 p-6 shadow-2xl">
         <div className="mx-auto w-16 h-16 rounded-full grid place-items-center bg-amber-100 text-amber-500 dark:bg-amber-400/15 flame"><Icon name="alarm" size={32} /></div>
-        <h3 className="mt-3 text-center text-xl font-extrabold tracking-tight">Пора принять</h3>
+        <h3 className="mt-3 text-center text-xl font-extrabold tracking-tight">{meds ? 'Пора принять' : 'Напоминание'}</h3>
         <div className="mt-4 space-y-2.5">
           {items.map(d => (
             <div key={d.key} className="rounded-2xl bg-zinc-50 dark:bg-zinc-800 p-3.5">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full grid place-items-center shrink-0" style={{ background: d.med.color + '22', color: d.med.color }}><Icon name="pill" size={18} /></div>
+                <div className="w-9 h-9 rounded-full grid place-items-center shrink-0" style={{ background: d.color + '22', color: d.color }}><Icon name={d.kind === 'med' ? 'pill' : 'target'} size={18} /></div>
                 <div className="min-w-0 flex-1">
-                  <div className="font-semibold truncate">{d.med.name}</div>
-                  <div className="text-xs text-zinc-500 dark:text-zinc-400">{d.time} · {d.med.dose}{d.med.note ? ` · ${d.med.note}` : ''}</div>
+                  <div className="font-semibold truncate" dir="auto">{d.title}</div>
+                  <div className="text-xs text-zinc-500 dark:text-zinc-400">{d.time}{d.sub ? ' · ' : ''}{d.sub}</div>
                 </div>
               </div>
               <div className="mt-3 grid grid-cols-2 gap-2">
-                <button onClick={() => onSnooze(d.key)} className="rounded-xl bg-white dark:bg-zinc-700 ring-1 ring-black/5 dark:ring-white/10 py-2.5 text-sm font-semibold transition active:scale-95">Через 10 мин</button>
-                <button onClick={() => onTake(d.key)} className="rounded-xl text-white py-2.5 text-sm font-semibold transition active:scale-95" style={{ background: d.med.color }}>Принял(а)</button>
+                <button onClick={() => onSnooze(d)} className="rounded-xl bg-white dark:bg-zinc-700 ring-1 ring-black/5 dark:ring-white/10 py-2.5 text-sm font-semibold transition active:scale-95">Через 10 мин</button>
+                <button onClick={() => onTake(d)} className="rounded-xl text-white py-2.5 text-sm font-semibold transition active:scale-95" style={{ background: d.color }}>{d.kind === 'med' ? 'Принял(а)' : 'Выполнено'}</button>
               </div>
             </div>
           ))}
@@ -1205,17 +2161,20 @@ function ArchiveView({ habits, onRestore, onDelete }) {
   );
 }
 
-function AddSheet({ onClose, onAdd }) {
-  const [name, setName] = useState('');
-  const [category, setCategory] = useState('health');
-  const [freq, setFreq] = useState('daily');
-  const [days, setDays] = useState([1, 3, 5]);
-  const [times, setTimes] = useState(3);
-  const [tod, setTod] = useState('any');
+function HabitSheet({ initial, onClose, onSave }) {
+  const [name, setName] = useState(initial ? initial.name : '');
+  const [category, setCategory] = useState(initial ? initial.category || 'health' : 'health');
+  const [freq, setFreq] = useState(initial ? initial.freq || 'daily' : 'daily');
+  const [days, setDays] = useState(initial && initial.days && initial.days.length ? initial.days : [1, 3, 5]);
+  const [times, setTimes] = useState(initial ? initial.times || 3 : 3);
+  const [tod, setTod] = useState(initial ? initial.timeOfDay || 'any' : 'any');
+  const [remindOn, setRemindOn] = useState(!!(initial && initial.remind));
+  const [remind, setRemind] = useState(initial && initial.remind ? initial.remind : '09:00');
+  const [snd, setSnd] = useState(initial ? initial.sound || '' : '');
   const [err, setErr] = useState('');
   const input = useRef(null);
   useEffect(() => {
-    setTimeout(() => input.current && input.current.focus(), 80);
+    if (!initial) setTimeout(() => input.current && input.current.focus(), 80);
     const k = e => { if (e.key === 'Escape') onClose(); };
     addEventListener('keydown', k); return () => removeEventListener('keydown', k);
   }, []);
@@ -1223,23 +2182,25 @@ function AddSheet({ onClose, onAdd }) {
     e.preventDefault();
     if (!name.trim()) return setErr('Введите название привычки');
     if (freq === 'days' && !days.length) return setErr('Выберите хотя бы один день недели');
-    onAdd({ name: name.trim().slice(0, 60), category, freq, days: freq === 'days' ? days : [], times, timeOfDay: tod });
+    sound.unlock();
+    onSave({ ...(initial ? { id: initial.id } : {}), name: name.trim().slice(0, 60), category, freq, days: freq === 'days' ? days : [], times, timeOfDay: tod,
+      remind: remindOn && remind ? remind : '', sound: snd });
   };
-  const label = 'block text-xs font-semibold uppercase tracking-wide text-zinc-400 mb-2';
+  const label = LBL;
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="fade-in absolute inset-0 bg-black/30 dark:bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <form onSubmit={submit} role="dialog" aria-modal="true" aria-label="Новая привычка"
+      <form onSubmit={submit} role="dialog" aria-modal="true" aria-label={initial ? 'Привычка' : 'Новая привычка'}
         className="sheet-in relative w-full sm:max-w-md max-h-[92vh] overflow-y-auto rounded-t-[28px] sm:rounded-[28px] bg-white dark:bg-zinc-900 p-6 pb-8 shadow-2xl">
         <div className="sm:hidden mx-auto -mt-2 mb-4 h-1.5 w-10 rounded-full bg-zinc-200 dark:bg-zinc-700" />
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-bold tracking-tight">Новая привычка</h2>
+          <h2 className="text-xl font-bold tracking-tight">{initial ? 'Привычка' : 'Новая привычка'}</h2>
           <button type="button" onClick={onClose} aria-label="Закрыть" className="w-9 h-9 rounded-full grid place-items-center bg-zinc-100 dark:bg-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition"><Icon name="x" size={18} /></button>
         </div>
 
         <div className="mt-5">
           <label className={label} htmlFor="hname">Название</label>
-          <input id="hname" ref={input} value={name} onChange={e => { setName(e.target.value); setErr(''); }} maxLength={60}
+          <input id="hname" ref={input} value={name} onChange={e => { setName(e.target.value); setErr(''); }} maxLength={60} dir="auto"
             placeholder="Например, «Пройти 8 000 шагов»"
             className="w-full rounded-2xl bg-zinc-100 dark:bg-zinc-800 px-4 py-3.5 text-[16px] outline-none ring-2 ring-transparent focus:ring-indigo-300 dark:focus:ring-indigo-500/60 transition placeholder:text-zinc-400" />
         </div>
@@ -1274,9 +2235,9 @@ function AddSheet({ onClose, onAdd }) {
             <div className="mt-3 flex items-center justify-between rounded-2xl bg-zinc-100 dark:bg-zinc-800 px-4 py-2.5 fade-in">
               <span className="text-sm text-zinc-600 dark:text-zinc-300">Раз в неделю</span>
               <div className="flex items-center gap-3">
-                <button type="button" aria-label="Меньше" onClick={() => setTimes(t => Math.max(1, t - 1))} className="w-8 h-8 rounded-full grid place-items-center bg-white dark:bg-zinc-700 shadow-sm active:scale-90 transition"><Icon name="minus" size={16} /></button>
+                <button type="button" aria-label="Меньше" onClick={() => setTimes(n => Math.max(1, n - 1))} className="w-8 h-8 rounded-full grid place-items-center bg-white dark:bg-zinc-700 shadow-sm active:scale-90 transition"><Icon name="minus" size={16} /></button>
                 <span className="w-5 text-center font-bold tabular-nums">{times}</span>
-                <button type="button" aria-label="Больше" onClick={() => setTimes(t => Math.min(6, t + 1))} className="w-8 h-8 rounded-full grid place-items-center bg-white dark:bg-zinc-700 shadow-sm active:scale-90 transition"><Icon name="plus" size={16} /></button>
+                <button type="button" aria-label="Больше" onClick={() => setTimes(n => Math.min(6, n + 1))} className="w-8 h-8 rounded-full grid place-items-center bg-white dark:bg-zinc-700 shadow-sm active:scale-90 transition"><Icon name="plus" size={16} /></button>
               </div>
             </div>
           )}
@@ -1285,18 +2246,40 @@ function AddSheet({ onClose, onAdd }) {
         <div className="mt-5">
           <span className={label}>Время суток</span>
           <div className="grid grid-cols-4 gap-2">
-            {TIME_ORDER.map(t => (
-              <button type="button" key={t} onClick={() => setTod(t)}
-                className={`flex flex-col items-center gap-1 rounded-2xl py-2.5 text-xs font-medium transition active:scale-95 ${tod === t ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900' : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'}`}>
-                <Icon name={TIMES[t].icon} size={18} />{t === 'any' ? 'Любое' : TIMES[t].label}
+            {TIME_ORDER.map(k => (
+              <button type="button" key={k} onClick={() => setTod(k)}
+                className={`flex flex-col items-center gap-1 rounded-2xl py-2.5 text-xs font-medium transition active:scale-95 ${tod === k ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900' : 'bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700'}`}>
+                <Icon name={TIMES[k].icon} size={18} />{k === 'any' ? 'Любое' : TIMES[k].label}
               </button>
             ))}
           </div>
         </div>
 
+        <div className="mt-5">
+          <div className="flex items-center justify-between gap-3 rounded-2xl bg-zinc-100 dark:bg-zinc-800 px-4 py-3">
+            <span className="min-w-0">
+              <span className="flex items-center gap-2 text-sm font-medium"><Icon name="alarm" size={18} className="text-amber-500" />Будильник</span>
+              <span className="block text-xs text-zinc-500 dark:text-zinc-400">Напомнить в назначенное время</span>
+            </span>
+            <Switch on={remindOn} onChange={v => { sound.unlock(); setRemindOn(v); }} label="Будильник" />
+          </div>
+          {remindOn && (
+            <div className="mt-3 space-y-3 fade-in">
+              <div>
+                <label className={label} htmlFor="hremind">Время</label>
+                <input id="hremind" type="time" value={remind} onChange={e => setRemind(e.target.value)} className={`${FIELD} tabular-nums`} />
+              </div>
+              <div>
+                <span className={label}>Мелодия</span>
+                <SoundPicker value={snd} onChange={setSnd} allowDefault />
+              </div>
+            </div>
+          )}
+        </div>
+
         {err && <p className="mt-4 text-sm text-rose-500 fade-in">{err}</p>}
         <button type="submit" className="mt-6 w-full rounded-2xl bg-indigo-500 hover:bg-indigo-600 active:scale-[.98] text-white py-3.5 font-semibold transition shadow-[0_10px_24px_-10px_rgba(99,102,241,.8)]">
-          Добавить привычку
+          {initial ? 'Сохранить' : 'Добавить привычку'}
         </button>
       </form>
     </div>
@@ -1328,7 +2311,7 @@ function PrivacySheet({ onClose }) {
           <H>Что мы не делаем</H>
           <p>Мы не собираем, не отправляем на серверы и не передаём третьим лицам ваши данные. В приложении нет регистрации, рекламы и аналитики.</p>
           <H>Разрешения</H>
-          <p>Уведомления и будильники нужны только для напоминаний о привычках и приёме лекарств. Запуск после перезагрузки нужен, чтобы восстановить запланированные напоминания.</p>
+          <p>Уведомления и будильники нужны только для напоминаний о привычках и приёме лекарств. Запуск после перезагрузки нужен, чтобы восстановить запланированные напоминания. Биометрия (Face ID, отпечаток) используется только для входа в приложение и обрабатывается самим устройством.</p>
           <H>Удаление данных</H>
           <p>Удалить данные можно в самом приложении или удалив приложение с устройства. Восстановить их после этого нельзя: копий у нас нет.</p>
           <H>Медицинская оговорка</H>
@@ -1343,17 +2326,22 @@ function PrivacySheet({ onClose }) {
 
 function App() {
   const [state, setState] = useState(load);
+  LANG = LANGS[state.lang] ? state.lang : 'ru';
+  DEFAULT_SOUND = state.sound || 'classic';
   const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const { habits, theme } = state;
   const [tab, setTab] = useState('today');
-  const [showAdd, setShowAdd] = useState(false);
+  const [habitSheet, setHabitSheet] = useState(null); // null | 'new' | привычка
   const [newMedal, setNewMedal] = useState(null);
   const [medSheet, setMedSheet] = useState(null); // null | 'new' | med
   const [ringing, setRinging] = useState([]);
   const [now, setNow] = useState(new Date());
+  const [lock, setLock] = useState(() => LOCAL ? null : lockStore.get());
+  const [locked, setLocked] = useState(() => !LOCAL && !!lockStore.get());
   const meds = state.meds || [], medLog = state.medLog || {}, alarmsOn = state.alarmsOn !== false;
 
-  // Будильник: проверяем расписание каждые 10 секунд
+  // Будильник: проверяем расписание лекарств и привычек каждые 10 секунд
   const stRef = useRef(state); stRef.current = state;
   const fired = useRef(new Set());
   const snoozes = useRef({});
@@ -1362,15 +2350,23 @@ function App() {
       const s = stRef.current;
       if (s.alarmsOn === false) return;
       const d = new Date(), k = keyOf(d), hm = hmOf(d), due = [];
+      const consider = (dk, tm, make) => {
+        const eff = snoozes.current[`${k}|${dk}`] || tm, fk = `${k}|${dk}|${eff}`;
+        const late = toMin(hm) - toMin(eff);
+        if (late >= 0 && late <= 30 && !fired.current.has(fk)) { fired.current.add(fk); due.push(make()); }
+      };
       for (const m of s.meds || []) {
         if (!m.alarm || !medToday(m, d)) continue;
-        for (const t of m.times) {
-          const dk = `${m.id}@${t}`;
+        for (const tm of m.times) {
+          const dk = `${m.id}@${tm}`;
           if (s.medLog && s.medLog[k] && s.medLog[k][dk]) continue;
-          const eff = snoozes.current[`${k}|${dk}`] || t, fk = `${k}|${dk}|${eff}`;
-          const late = toMin(hm) - toMin(eff);
-          if (late >= 0 && late <= 30 && !fired.current.has(fk)) { fired.current.add(fk); due.push({ med: m, time: t, key: dk }); }
+          consider(dk, tm, () => ({ kind: 'med', key: dk, time: tm, title: m.name, sub: [m.dose, m.note].filter(Boolean).join(' · '), color: m.color, sound: m.sound || '' }));
         }
+      }
+      for (const h of s.habits || []) {
+        if (!habitDueOn(h, d)) continue;
+        const cat = CATS[h.category] || CATS.health;
+        consider('h:' + h.id, h.remind, () => ({ kind: 'habit', key: 'h:' + h.id, id: h.id, time: h.remind, title: h.name, sub: cat.label, color: cat.hex, sound: h.sound || '' }));
       }
       if (due.length) setRinging(r => [...r.filter(x => !due.some(y => y.key === x.key)), ...due]);
     };
@@ -1380,19 +2376,21 @@ function App() {
     document.addEventListener('visibilitychange', vis);
     return () => { clearInterval(i); document.removeEventListener('visibilitychange', vis); };
   }, []);
+  const ringSound = ringing.length ? (ringing[0].sound || state.sound || 'classic') : null;
   useEffect(() => {
-    if (!ringing.length) return;
+    if (!ringSound) return;
     const title = document.title;
     let n = 0;
+    sound.start(ringSound);
     const ring = () => {
       n++;
-      if (n <= 60) { sound.beep(); if (navigator.vibrate) try { navigator.vibrate([300, 150, 300]); } catch (e) {} }
-      document.title = n % 2 ? '⏰ Пора принять таблетки' : title;
+      if (n <= 60 && navigator.vibrate) try { navigator.vibrate([300, 150, 300]); } catch (e) {}
+      document.title = n % 2 ? L('⏰ Напоминание') : title;
     };
     ring();
     const i = setInterval(ring, 1500);
-    return () => { clearInterval(i); document.title = title; };
-  }, [ringing.length]);
+    return () => { clearInterval(i); sound.stop(); document.title = title; };
+  }, [ringSound]);
 
   useEffect(() => {
     const upd = () => setNow(new Date());
@@ -1403,7 +2401,7 @@ function App() {
   // приложение для компьютера: изменения с другого устройства (iPhone) приходят сюда
   useEffect(() => { sync.onRemote = s => setState(normalize(s)); return () => { sync.onRemote = null; }; }, []);
   useEffect(() => { save(state); }, [state]);
-  useEffect(() => { notify.plan(state); }, [state.meds, state.medLog, state.alarmsOn]);
+  useEffect(() => { notify.plan(state); }, [state.meds, state.medLog, state.alarmsOn, state.habits, state.lang]);
   useEffect(() => {
     if (!notify.available) return;
     const vis = () => { if (!document.hidden) notify.plan(stRef.current); };
@@ -1417,6 +2415,18 @@ function App() {
     mq.addEventListener && mq.addEventListener('change', apply);
     return () => mq.removeEventListener && mq.removeEventListener('change', apply);
   }, [theme]);
+  useEffect(() => { document.documentElement.lang = LANG; document.documentElement.dir = LANGS[LANG].dir; }, [state.lang]);
+  // защита входа: снова спрашиваем код, если приложение было свёрнуто дольше 30 секунд
+  useEffect(() => {
+    let hiddenAt = 0;
+    const vis = () => {
+      if (document.hidden) hiddenAt = Date.now();
+      else if (hiddenAt && Date.now() - hiddenAt > 30000 && !LOCAL && lockStore.get()) setLocked(true);
+    };
+    document.addEventListener('visibilitychange', vis);
+    return () => document.removeEventListener('visibilitychange', vis);
+  }, []);
+  const changeLock = cfg => { lockStore.set(cfg); setLock(cfg); };
 
   const setHabits = fn => setState(s => ({ ...s, habits: fn(s.habits) }));
   const todayK = keyOf(now);
@@ -1447,9 +2457,10 @@ function App() {
   const archive = id => setHabits(hs => hs.map(h => h.id === id ? { ...h, archived: true } : h));
   const restore = id => setHabits(hs => hs.map(h => h.id === id ? { ...h, archived: false } : h));
   const remove = id => setHabits(hs => hs.filter(h => h.id !== id));
-  const add = data => {
-    setHabits(hs => [...hs, { id: uid(), ...data, createdAt: todayK, archived: false, history: {} }]);
-    setShowAdd(false); setTab('today');
+  const saveHabit = data => {
+    if (data.id) setHabits(hs => hs.map(h => h.id === data.id ? { ...h, ...data } : h));
+    else { setHabits(hs => [...hs, { id: uid(), ...data, createdAt: todayK, archived: false, history: {} }]); setTab('today'); }
+    setHabitSheet(null);
   };
   const takeMed = key => setState(s => {
     const d = new Date(), k = keyOf(d);
@@ -1458,17 +2469,18 @@ function App() {
     log[k] = day;
     return { ...s, medLog: log };
   });
-  const takeFromAlarm = key => {
+  const takeFromAlarm = item => {
     const k = keyOf(new Date());
-    if (!(medLog[k] && medLog[k][key])) takeMed(key);
-    setRinging(r => r.filter(x => x.key !== key));
+    if (item.kind === 'habit') { const h = habits.find(x => x.id === item.id); if (h && !h.history[k]) toggle(h.id); }
+    else if (!(medLog[k] && medLog[k][item.key])) takeMed(item.key);
+    setRinging(r => r.filter(x => x.key !== item.key));
   };
-  const snooze = key => {
+  const snooze = item => {
     const d = new Date(Date.now() + 10 * 60000);
-    snoozes.current[`${keyOf(new Date())}|${key}`] = keyOf(d) === keyOf(new Date()) ? hmOf(d) : '23:59';
-    const item = ringing.find(x => x.key === key);
-    if (item) notify.snooze(item.med, item.time, d);
-    setRinging(r => r.filter(x => x.key !== key));
+    snoozes.current[`${keyOf(new Date())}|${item.key}`] = keyOf(d) === keyOf(new Date()) ? hmOf(d) : '23:59';
+    notify.snooze(item.kind === 'med' ? L('Пора принять лекарство') : L('Напоминание о привычке'),
+      `${item.time} · ${item.title}${item.kind === 'med' && item.sub ? ' · ' + item.sub : ''}`, d);
+    setRinging(r => r.filter(x => x.key !== item.key));
   };
   const saveMed = m => {
     setState(s => {
@@ -1478,54 +2490,55 @@ function App() {
     setMedSheet(null);
   };
   const deleteMed = id => { setState(s => ({ ...s, meds: (s.meds || []).filter(x => x.id !== id) })); setMedSheet(null); };
-  const openNew = () => tab === 'pills' ? setMedSheet('new') : setShowAdd(true);
-  const cycleTheme = () => setState(s => ({ ...s, theme: s.theme === 'auto' ? 'light' : s.theme === 'light' ? 'dark' : 'auto' }));
+  const openNew = () => tab === 'pills' ? setMedSheet('new') : setHabitSheet('new');
+
+  if (locked && lock) return <LockScreen cfg={lock} alarm={ringing.length > 0} onUnlock={() => setLocked(false)} />;
 
   const hour = now.getHours();
   const greeting = hour < 5 ? 'Доброй ночи' : hour < 12 ? 'Доброе утро' : hour < 18 ? 'Добрый день' : 'Добрый вечер';
-  const dateStr = now.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
+  const dateStr = now.toLocaleDateString(LOC(), { weekday: 'long', day: 'numeric', month: 'long' });
   const archivedCount = habits.filter(h => h.archived).length;
   const tabs = [['today', 'Сегодня', 'listChecks'], ['pills', 'Таблетки', 'pill'], ['medals', 'Медали', 'medal'], ['stats', 'Статистика', 'chart'], ['archive', 'Архив', 'archive']];
   const points = pointsOf(habits);
-  const themeIcon = theme === 'auto' ? 'monitor' : theme === 'light' ? 'sun' : 'moon';
-  const themeLabel = theme === 'auto' ? 'Тема: авто' : theme === 'light' ? 'Тема: светлая' : 'Тема: тёмная';
 
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-2xl px-4 sm:px-6 pt-6 sm:pt-12 pb-32">
         <header className="flex items-start justify-between gap-4">
-          <div>
+          <div className="min-w-0">
             <p className="text-sm font-medium text-zinc-400 dark:text-zinc-500 first-letter:uppercase">{dateStr}</p>
             <h1 className="mt-0.5 text-3xl sm:text-4xl font-extrabold tracking-tight">{greeting}</h1>
           </div>
-          <div className="flex items-center gap-2">
-            <button onClick={openNew} className={`hidden sm:inline-flex items-center gap-2 rounded-full text-white pl-3.5 pr-4 h-10 text-sm font-semibold transition active:scale-95 shadow-[0_8px_20px_-8px_rgba(99,102,241,.8)] ${tab === 'pills' ? 'bg-violet-500 hover:bg-violet-600' : 'bg-indigo-500 hover:bg-indigo-600'}`}>
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={openNew} className={`hidden sm:inline-flex items-center gap-2 rounded-full text-white px-4 h-10 text-sm font-semibold transition active:scale-95 shadow-[0_8px_20px_-8px_rgba(99,102,241,.8)] ${tab === 'pills' ? 'bg-violet-500 hover:bg-violet-600' : 'bg-indigo-500 hover:bg-indigo-600'}`}>
               <Icon name="plus" size={18} stroke={2.5} />{tab === 'pills' ? 'Лекарство' : 'Новая привычка'}
             </button>
-            <button onClick={() => setTab('medals')} title="Баллы за активность" aria-label={`Баллы: ${points}`}
-              className="h-10 rounded-full inline-flex items-center gap-1.5 pl-2.5 pr-3.5 bg-white dark:bg-zinc-900 ring-1 ring-black/5 dark:ring-white/10 font-bold tabular-nums hover:scale-105 active:scale-95 transition">
+            <button onClick={() => setTab('medals')} title="Баллы за активность" aria-label={L('Баллы: {0}', points)}
+              className="h-10 rounded-full inline-flex items-center gap-1.5 px-3 bg-white dark:bg-zinc-900 ring-1 ring-black/5 dark:ring-white/10 font-bold tabular-nums hover:scale-105 active:scale-95 transition">
               <Icon name="star" size={18} className="text-amber-400" fill="currentColor" />{points}
             </button>
-            <button onClick={cycleTheme} title={themeLabel} aria-label={themeLabel}
+            <button onClick={() => setShowSettings(true)} title="Настройки" aria-label="Настройки"
               className="w-10 h-10 rounded-full grid place-items-center bg-white dark:bg-zinc-900 ring-1 ring-black/5 dark:ring-white/10 text-zinc-600 dark:text-zinc-300 hover:scale-105 active:scale-95 transition">
-              <span key={themeIcon} className="pop grid place-items-center"><Icon name={themeIcon} size={18} /></span>
+              <Icon name="settings" size={18} />
             </button>
           </div>
         </header>
 
         <nav className="mt-6 grid grid-cols-5 gap-1 rounded-2xl bg-zinc-200/60 dark:bg-zinc-900 p-1" role="tablist">
           {tabs.map(([k, l, ic]) => (
-            <button key={k} role="tab" aria-selected={tab === k} onClick={() => setTab(k)}
+            <button key={k} role="tab" data-tab={k} aria-selected={tab === k} onClick={() => setTab(k)}
               className={`min-w-0 flex flex-col lg:flex-row items-center justify-center gap-0.5 lg:gap-1.5 rounded-xl py-1.5 lg:py-2 text-[10px] sm:text-xs lg:text-sm font-semibold transition-all ${tab === k ? 'bg-white dark:bg-zinc-700 shadow-sm text-zinc-900 dark:text-white' : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'}`}>
-              <Icon name={ic} size={16} /><span>{l}</span>
+              <Icon name={ic} size={16} /><span className="max-w-full truncate">{l}</span>
               {k === 'archive' && archivedCount > 0 && <span className="hidden sm:inline text-[11px] font-bold rounded-full bg-zinc-300/70 dark:bg-zinc-600 px-1.5">{archivedCount}</span>}
             </button>
           ))}
         </nav>
 
         <main className="mt-6" key={tab}>
-          {tab === 'today' && <TodayView habits={habits} now={now} onToggle={toggle} onArchive={archive} onDelete={remove} onAdd={() => setShowAdd(true)} />}
-          {tab === 'pills' && <PillsView meds={meds} medLog={medLog} now={now} alarmsOn={alarmsOn}
+          {tab === 'today' && <TodayView habits={habits} now={now} onToggle={toggle} onArchive={archive} onDelete={remove} onEdit={h => setHabitSheet(h)} onAdd={() => setHabitSheet('new')} />}
+          {tab === 'pills' && <PillsView meds={meds} medLog={medLog} now={now} alarmsOn={alarmsOn} soundId={state.sound || 'classic'}
+            hasAlarms={meds.some(m => m.alarm) || habits.some(h => !h.archived && h.remind)}
+            onSound={v => setState(s => ({ ...s, sound: v }))}
             onToggleAlarms={v => { sound.unlock(); setState(s => ({ ...s, alarmsOn: v })); }}
             onTake={takeMed} onAdd={() => setMedSheet('new')} onEdit={m => setMedSheet(m)} onExactGranted={() => notify.plan(stRef.current)} />}
           {tab === 'medals' && <MedalsView habits={habits} />}
@@ -1539,13 +2552,14 @@ function App() {
       </div>
 
       <button onClick={openNew} aria-label={tab === 'pills' ? 'Новое лекарство' : 'Новая привычка'}
-        className={`sm:hidden fixed right-5 bottom-6 z-40 w-14 h-14 rounded-full ${tab === 'pills' ? 'bg-violet-500' : 'bg-indigo-500'} text-white grid place-items-center shadow-[0_12px_28px_-8px_rgba(99,102,241,.9)] active:scale-90 transition`}
+        className={`sm:hidden fixed end-5 bottom-6 z-40 w-14 h-14 rounded-full ${tab === 'pills' ? 'bg-violet-500' : 'bg-indigo-500'} text-white grid place-items-center shadow-[0_12px_28px_-8px_rgba(99,102,241,.9)] active:scale-90 transition`}
         style={{ marginBottom: 'env(safe-area-inset-bottom)' }}>
         <Icon name="plus" size={26} stroke={2.5} />
       </button>
 
+      {showSettings && <SettingsSheet state={state} setState={setState} lock={lock} onLock={changeLock} onClose={() => setShowSettings(false)} onPrivacy={() => { setShowSettings(false); setShowPrivacy(true); }} />}
       {showPrivacy && <PrivacySheet onClose={() => setShowPrivacy(false)} />}
-      {showAdd && <AddSheet onClose={() => setShowAdd(false)} onAdd={add} />}
+      {habitSheet && <HabitSheet initial={habitSheet === 'new' ? null : habitSheet} onClose={() => setHabitSheet(null)} onSave={saveHabit} />}
       {newMedal && <NewMedalModal n={newMedal} onClose={() => setNewMedal(null)} />}
       {medSheet && <MedSheet initial={medSheet === 'new' ? null : medSheet} onClose={() => setMedSheet(null)} onSave={saveMed} onDelete={deleteMed} />}
       {ringing.length > 0 && <AlarmModal items={ringing} onTake={takeFromAlarm} onSnooze={snooze} onStop={() => setRinging([])} />}

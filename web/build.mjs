@@ -24,10 +24,16 @@ if (!jsx || css == null || !bodyClass) throw new Error('не найден скр
 
 // 1) JS
 const entry = join(tmp, 'entry.jsx');
-writeFileSync(entry, "import React from 'react';\nimport * as ReactDOM from 'react-dom/client';\n" + jsx);
+// В приложении для телефона подключаем функции устройства (уведомления, «Назад», биометрия) через мост Capacitor
+const prelude = `import React from 'react';
+import * as ReactDOM from 'react-dom/client';
+import { Capacitor as __Cap, registerPlugin as __reg } from '@capacitor/core';
+if (__Cap.isNativePlatform()) ['LocalNotifications', 'App', 'NativeBiometric'].forEach(n => __reg(n));
+`;
+writeFileSync(entry, prelude + jsx);
 const res = await build({
   entryPoints: [entry], bundle: true, minify: true, write: false, format: 'iife', target: ['es2019', 'safari13'],
-  jsx: 'transform', jsxFactory: 'React.createElement', jsxFragment: 'React.Fragment', charset: 'utf8',
+  jsx: 'transform', jsxFactory: 'JSXT', jsxFragment: 'React.Fragment', charset: 'utf8',
   define: { 'process.env.NODE_ENV': '"production"' }, logLevel: 'warning', absWorkingDir: here,
 });
 const js = res.outputFiles[0].text.replace(/<\/script/gi, '<\\/script');
