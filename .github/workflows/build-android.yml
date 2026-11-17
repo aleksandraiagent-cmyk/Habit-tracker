@@ -62,6 +62,9 @@ jobs:
           ./gradlew assembleRelease --no-daemon --stacktrace
           mkdir -p ../../out
           cp app/build/outputs/apk/release/app-release.apk ../../out/Privychki.apk
+          # отладочная сборка того же кода — только для проверки на эмуляторе (в ней Capacitor пишет журнал страницы)
+          ./gradlew assembleDebug --no-daemon
+          mkdir -p ../../out-debug && cp app/build/outputs/apk/debug/app-debug.apk ../../out-debug/
           # AAB для Google Play — только с постоянным ключом (ключ загрузки Play App Signing)
           if [ -f release.keystore ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ]; then
             ./gradlew bundleRelease --no-daemon
@@ -94,19 +97,27 @@ jobs:
           target: google_apis
           disable-animations: true
           script: |
+            mkdir -p emu
             adb install -r out/Privychki.apk
             adb shell pm grant app.habittracker.mobile android.permission.POST_NOTIFICATIONS || true
             adb shell monkey -p app.habittracker.mobile -c android.intent.category.LAUNCHER 1
             sleep 25
-            mkdir -p emu
             adb exec-out screencap -p > emu/screen.png
-            adb logcat -d > emu/logcat.txt
+            adb logcat -d > emu/logcat-release.txt
             adb shell pidof app.habittracker.mobile > emu/pid.txt || true
-            grep -E "FATAL EXCEPTION|AndroidRuntime: Process: app.habittracker" emu/logcat.txt && exit 1 || true
+            grep -E "FATAL EXCEPTION|AndroidRuntime: Process: app.habittracker" emu/logcat-release.txt && exit 1 || true
             test -s emu/pid.txt
-            grep -F "[privychki] native" emu/logcat.txt | tail -3 || true
-            grep -qF "[privychki] native ok" emu/logcat.txt || { echo "Функции телефона (уведомления) не подключены"; exit 1; }
-            grep -E "Capacitor/Console.*(Error|error)" emu/logcat.txt | head -20 || true
+            echo "OK: релизный APK запущен"
+            adb uninstall app.habittracker.mobile
+            adb logcat -c
+            adb install -r out-debug/app-debug.apk
+            adb shell pm grant app.habittracker.mobile android.permission.POST_NOTIFICATIONS || true
+            adb shell monkey -p app.habittracker.mobile -c android.intent.category.LAUNCHER 1
+            sleep 25
+            adb logcat -d > emu/logcat-debug.txt
+            grep -F "[privychki] native" emu/logcat-debug.txt | tail -3 || true
+            grep -qF "[privychki] native ok" emu/logcat-debug.txt || { echo "Функции телефона (уведомления) не подключены"; exit 1; }
+            grep -E "Capacitor/Console.*(Error|error)" emu/logcat-debug.txt | head -20 || true
             echo "OK: приложение запущено и работает"
       - name: Скриншот с эмулятора
         if: always()
